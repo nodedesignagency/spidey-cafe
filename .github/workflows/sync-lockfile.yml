@@ -1,0 +1,51 @@
+name: Sync lockfile
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: Branch to commit the lockfile to
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_branch }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Generate the lockfile
+        run: |
+          set -euo pipefail
+          npm install --package-lock-only --no-audit --no-fund
+          test -f package-lock.json
+          node -e "const l=require('./package-lock.json');console.log('lockfileVersion',l.lockfileVersion,'packages',Object.keys(l.packages||{}).length)"
+
+      - name: Verify a clean install resolves against it
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Commit to the target branch
+        env:
+          TARGET: ${{ inputs.target_branch }}
+        run: |
+          set -euo pipefail
+          git config user.email noreply@anthropic.com
+          git config user.name Claude
+          git add package-lock.json
+          if git diff --cached --quiet; then
+            echo "lockfile already present and identical; nothing to commit"
+            exit 0
+          fi
+          git commit -m "Add npm lockfile" -m "Generated with npm install --package-lock-only and verified by running npm ci followed by a production build. Committed by sync-lockfile.yml."
+          git push origin "HEAD:$TARGET"
