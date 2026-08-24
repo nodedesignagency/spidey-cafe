@@ -38,22 +38,18 @@ jobs:
           curl -fsSL "$EMPTY_URL"  -o public/media/cup-empty.jpg
           curl -fsSL "$FILLED_URL" -o public/media/cup-filled.jpg
           curl -fsSL "$POUR_URL"   -o public/media/pour.mp4
-          file public/media/cup-empty.jpg public/media/cup-filled.jpg public/media/pour.mp4
 
       - name: Verify the downloads are real media
         run: |
           set -euo pipefail
-          file public/media/cup-empty.jpg  | grep -q 'JPEG'
-          file public/media/cup-filled.jpg | grep -q 'JPEG'
-          ffprobe -v error -show_entries format=duration,format_name \
-            -of default=noprint_wrappers=1 public/media/pour.mp4
+          file public/media/cup-empty.jpg  | grep -q JPEG
+          file public/media/cup-filled.jpg | grep -q JPEG
+          ffprobe -v error -show_entries format=duration -of csv=p=0 public/media/pour.mp4
 
       - name: Transcode WebM fallback
         run: |
           set -euo pipefail
-          ffmpeg -v error -i public/media/pour.mp4 \
-            -c:v libvpx-vp9 -crf 40 -b:v 0 -vf scale=540:-2 -an \
-            -y public/media/pour.webm
+          ffmpeg -v error -i public/media/pour.mp4 -c:v libvpx-vp9 -crf 40 -b:v 0 -vf scale=540:-2 -an -y public/media/pour.webm
           ls -la public/media
 
       - name: Commit to the target branch
@@ -68,13 +64,5 @@ jobs:
             echo "media already present and identical; nothing to commit"
             exit 0
           fi
-          git commit -m "Add generated hero stills and pour clip
-
-The two stills are the pour's start and end keyframes: the empty cup in the web
-and the finished drink. The clip interpolates between them, so it lands on
-exactly the frame the ready state shows.
-
-Fetched and committed by .github/workflows/fetch-media.yml, because the session
-that generated them could only reach GitHub through an API that cannot carry
-binary content."
+          git commit -m "Add generated hero stills and pour clip" -m "The two stills are the pour clip's start and end keyframes: the empty cup in the web, and the finished drink. Committed by fetch-media.yml, because the session that generated them could only reach GitHub through an API that cannot carry binary content."
           git push origin "HEAD:$TARGET"
