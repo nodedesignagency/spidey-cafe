@@ -1,0 +1,52 @@
+name: Sync mobile assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: Branch to copy the media on
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  copy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_branch }}
+
+      - name: Copy media from the web app into the Expo app
+        run: |
+          set -euo pipefail
+          mkdir -p mobile/assets
+          for f in cup-empty.jpg cup-filled.jpg pour.mp4; do
+            test -f "public/media/$f"
+            cp "public/media/$f" "mobile/assets/$f"
+          done
+          ls -la mobile/assets
+
+      - name: Verify the copies match byte for byte
+        run: |
+          set -euo pipefail
+          for f in cup-empty.jpg cup-filled.jpg pour.mp4; do
+            cmp "public/media/$f" "mobile/assets/$f"
+            echo "$f matches"
+          done
+
+      - name: Commit to the target branch
+        env:
+          TARGET: ${{ inputs.target_branch }}
+        run: |
+          set -euo pipefail
+          git config user.email noreply@anthropic.com
+          git config user.name Claude
+          git add mobile/assets
+          if git diff --cached --quiet; then
+            echo "assets already present and identical; nothing to commit"
+            exit 0
+          fi
+          git commit -m "Copy hero stills and pour clip into the Expo app" -m "Byte-identical copies of public/media, placed where Metro can bundle them. Committed by sync-mobile-assets.yml."
+          git push origin "HEAD:$TARGET"
