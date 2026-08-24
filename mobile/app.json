@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "Spidey Cafe",
+    "slug": "spidey-cafe",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "plugins": [
+      "expo-video"
+    ]
+  }
+}
