@@ -6,34 +6,43 @@ Pick a drink from the carousel, hit the CTA, and the hero above shows the drink
 actually being built: ingredients pour down from off-frame into an empty cup
 suspended in a web, until the finished drink is sitting there.
 
-## Running it
+Two builds of the same flow:
+
+| | where | what it is for |
+| --- | --- | --- |
+| `mobile/` | Expo Go, or a simulator | the real thing, on a phone |
+| root | a desktop browser | quick look and sharing by URL |
+
+## Running it on a phone
+
+```bash
+cd mobile
+npm install
+npx expo start
+```
+
+Scan the QR code with Expo Go. Both devices need to be on the same wifi; add
+`--tunnel` if they are not.
+
+## Running the web version
 
 ```bash
 npm install
-npm run dev -- --host    # --host so a phone on the same wifi can reach it
+npm run dev -- --host
 ```
 
-Everything needed is in the repo — no assets to fetch by hand.
-
-To open it in the iOS simulator straight from a terminal:
-
-```bash
-xcrun simctl list devices available
-xcrun simctl boot "iPhone 16 Pro"
-open -a Simulator
-xcrun simctl openurl booted http://localhost:5173
-```
-
-The simulator shares the host's network stack, so plain `localhost` works. On a
-real iPhone, use the `Network:` URL that `--host` prints instead.
+This one draws its own phone bezel and status bar, which reads correctly on a
+desktop viewport and badly on an actual handset — you get a phone inside a
+phone, two status bars, and a squashed hero. Use `mobile/` for anything on a
+device.
 
 ## The interaction
 
-Three states, driven by one `phase` value in `src/App.jsx`:
+Three states, driven by one `phase` value:
 
 | phase | hero | CTA |
 | --- | --- | --- |
-| `idle` | empty cup in the web, breathing gently | **Spin it up** |
+| `idle` | empty cup in the web | **Spin it up** |
 | `pouring` | the pour clip, with an ingredient ticker | **Spinning…** (progress sweep) |
 | `ready` | the finished drink | **Add to bag** + *Swing another* |
 
@@ -43,41 +52,49 @@ build rather than leaving the hero out of sync with the selection.
 The pour has a hard fallback timer, so if the clip fails to load or autoplay is
 blocked the flow still completes and reaches `ready`.
 
+## Matching the frame
+
+`mobile/src/theme.js` holds the measurements from the Figma frame (node 0:102,
+drawn at 393pt wide) as its own numbers — sheet 369 tall with a 40 radius, title
+20, drink name 14, CTA 350x56 at 20 from the bottom, ink `#3c2c21`. Positional
+values are multiplied by `width / 393` so proportions hold on other handsets.
+
+Two deliberate departures, both noted in the code:
+
+- The frame's cup centres are unevenly spaced, because the cups differ in width.
+  A snap carousel needs one uniform step, so `cupStep` is that spacing averaged.
+  It lands the centre and both outer cups within a point or two of the frame.
+- The frame has no reset control and no room for one, so *Swing another* sits on
+  the hero rather than in the sheet.
+
 ## Media
 
-The two hero stills and the pour clip were generated with Magnific — see
-[`public/media/README.md`](public/media/README.md) for how each was produced.
-
-The short version: the filled still was generated using the empty one as an
-image reference so the web and lighting match, then both were locked as the
-start and end keyframes of the clip. That is why the video lands on exactly the
-frame the `ready` state shows.
+The hero stills and the pour clip were generated with Magnific — see
+[`public/media/README.md`](public/media/README.md) for how. `mobile/assets/`
+holds byte-identical copies, since Metro bundles from inside its own project.
 
 ### One clip, five drinks
 
 There is a single pour clip, and it pours chocolate. Each drink differentiates
-itself through the ingredient ticker (`src/components/IngredientTicker.jsx`),
-which names what is going in, in recipe order, with a colour dot per
-ingredient. Overlaying fake CSS particles on photoreal footage was tried first
-and read as debris, so it was cut.
+itself through the ingredient ticker, which names what is going in, in recipe
+order. Overlaying fake CSS particles on photoreal footage was tried first and
+read as debris, so it was cut. Giving each drink its own real pour means one
+more generated clip per drink.
 
 ## Cup art
 
-The carousel cups are vector (`src/components/CupIcon.jsx`), tinted per drink,
-so adding a drink costs no image generation. The roundel on the cup is an
-original web motif, not any existing coffee chain's mark.
+The carousel cups are vector, tinted per drink, so adding a drink costs no image
+generation — `src/components/CupIcon.jsx` on web, the `react-native-svg` port in
+`mobile/`. The roundel is an original web motif, not any existing coffee chain's
+mark.
 
 ## Verified
 
-From a clean clone: `npm install`, `npm run build`, then driven in Chromium —
-the full `idle -> pouring -> ready -> reset` path, the ingredient ticker
-stepping in order, drink switching rewinding the hero, and all five cups landing
-inside the frame with the outer two clipped. No console errors, no failed
-requests.
+From a clean clone of this branch: `npm install` then an iOS bundle, with all
+three assets resolving. The layout and the full `idle -> pouring -> ready ->
+reset` path were driven at 393x852 through the react-native-web build, with the
+rendered geometry measured against the frame.
 
-Touch panning of the carousel could not be exercised — headless Chromium does
-not deliver synthesized touch gestures to the scroll container (the identical
-gesture with a mouse source scrolls it correctly). Scrolling itself is verified
-via wheel, mouse gesture, programmatic scroll and tap; the carousel is a plain
-`overflow-x: auto` + `scroll-snap` container with `touch-action: auto`, so it
-should pan normally on a device. Worth a ten-second check on a real phone.
+Not verified: playback on a real device, and touch panning of the carousel.
+Neither headless Chromium nor a simulator exercises real touch, so those want a
+ten-second check on an actual phone.
