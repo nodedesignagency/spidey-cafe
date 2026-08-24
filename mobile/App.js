@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native'
+import {
+  Animated,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useVideoPlayer, VideoView } from 'expo-video'
@@ -7,7 +14,7 @@ import { useVideoPlayer, VideoView } from 'expo-video'
 import { drinks, DEFAULT_INDEX } from './src/data/drinks'
 import DrinkCarousel from './src/components/DrinkCarousel'
 import IngredientTicker from './src/components/IngredientTicker'
-import { theme } from './src/theme'
+import { scale, spec, theme } from './src/theme'
 
 const POUR_MS = 5000 // length of the generated clip; also the no-video fallback
 
@@ -17,6 +24,12 @@ const POUR = require('./assets/pour.mp4')
 
 function Screen() {
   const insets = useSafeAreaInsets()
+  const { width, height } = useWindowDimensions()
+  const s = scale(width)
+  const sheetH = spec.sheetH * s + insets.bottom
+  // The hero runs under the sheet's rounded corners so the photo shows through them.
+  const heroH = height - sheetH + spec.sheetRadius * s
+
   const [index, setIndex] = useState(DEFAULT_INDEX)
   const [phase, setPhase] = useState('idle') // idle | pouring | ready
   const fallbackRef = useRef(null)
@@ -105,7 +118,7 @@ function Screen() {
     <View style={styles.root}>
       <StatusBar style="light" />
 
-      <View style={styles.hero}>
+      <View style={[styles.hero, { height: heroH }]}>
         <Animated.Image source={EMPTY} style={[styles.layer, { opacity: emptyOp }]} />
 
         <Animated.View style={[styles.layer, { opacity: videoOp }]} pointerEvents="none">
@@ -121,41 +134,66 @@ function Screen() {
 
         <Animated.Image source={FILLED} style={[styles.layer, { opacity: filledOp }]} />
 
-        <View style={[styles.caption, { paddingBottom: 40 }]} pointerEvents="none">
+        {/* Status lives over the hero, so the sheet keeps the frame's exact geometry. */}
+        <View style={[styles.caption, { bottom: spec.sheetRadius * s + 24 }]}>
           <IngredientTicker
             drink={drink}
             active={phase === 'pouring'}
             stepMs={POUR_MS / drink.ingredients.length}
           />
           {phase === 'ready' && (
-            <View style={styles.readyChip}>
-              <Text style={styles.readyText}>Caught it. Ready in 4 min</Text>
-            </View>
+            <>
+              <View style={styles.readyChip}>
+                <Text style={styles.readyText}>Caught it. Ready in 4 min</Text>
+              </View>
+              <Pressable onPress={reset} hitSlop={10}>
+                <Text style={styles.again}>Swing another</Text>
+              </Pressable>
+            </>
           )}
         </View>
       </View>
 
-      <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
-        <Text style={styles.title}>What are we swinging today?</Text>
+      <View
+        style={[
+          styles.sheet,
+          {
+            height: sheetH,
+            borderTopLeftRadius: spec.sheetRadius * s,
+            borderTopRightRadius: spec.sheetRadius * s,
+          },
+        ]}
+      >
+        <Text style={[styles.title, { top: spec.titleTop * s, fontSize: spec.titleSize * s }]}>
+          What are we swinging today?
+        </Text>
 
-        <DrinkCarousel
-          drinks={drinks}
-          index={index}
-          onIndex={setIndex}
-          disabled={phase === 'pouring'}
-        />
-
-        <View style={styles.meta}>
-          <Text style={styles.name}>{drink.name}</Text>
-          <Text style={styles.tagline}>{drink.tagline}</Text>
+        <View style={[styles.carousel, { top: spec.carouselTop * s }]}>
+          <DrinkCarousel
+            drinks={drinks}
+            index={index}
+            onIndex={setIndex}
+            disabled={phase === 'pouring'}
+          />
         </View>
+
+        <Text style={[styles.name, { top: spec.nameTop * s, fontSize: spec.nameSize * s }]}>
+          {drink.name}
+        </Text>
 
         <Pressable
           onPress={pour}
           disabled={phase === 'pouring'}
           style={({ pressed }) => [
             styles.cta,
-            pressed && { backgroundColor: theme.ctaPress, transform: [{ scale: 0.985 }] },
+            {
+              width: spec.ctaW * s,
+              height: spec.ctaH * s,
+              borderRadius: spec.ctaRadius * s,
+              bottom: spec.ctaBottom * s + insets.bottom,
+              marginLeft: -(spec.ctaW * s) / 2,
+            },
+            pressed && { backgroundColor: theme.ctaPress },
           ]}
         >
           {phase === 'pouring' && (
@@ -166,11 +204,7 @@ function Screen() {
               ]}
             />
           )}
-          <Text style={styles.ctaText}>{ctaLabel}</Text>
-        </Pressable>
-
-        <Pressable onPress={reset} disabled={phase !== 'ready'} hitSlop={8}>
-          <Text style={[styles.ghost, phase !== 'ready' && styles.ghostHidden]}>Swing another</Text>
+          <Text style={[styles.ctaText, { fontSize: spec.ctaTextSize * s }]}>{ctaLabel}</Text>
         </Pressable>
       </View>
     </View>
@@ -188,10 +222,10 @@ export default function App() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.backdrop },
 
-  hero: { flex: 1, backgroundColor: theme.heroFallback, overflow: 'hidden' },
+  hero: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: theme.heroFallback },
   layer: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%', resizeMode: 'cover' },
 
-  caption: { position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center', gap: 8 },
+  caption: { position: 'absolute', left: 0, right: 0, alignItems: 'center', gap: 10 },
   readyChip: {
     paddingHorizontal: 16,
     paddingVertical: 9,
@@ -199,33 +233,45 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(28, 18, 12, 0.72)',
   },
   readyText: { color: '#fff', fontSize: 13, fontWeight: '500' },
+  again: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '500',
+    textDecorationLine: 'underline',
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowRadius: 6,
+  },
 
   sheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: theme.sheet,
-    borderTopLeftRadius: 34,
-    borderTopRightRadius: 34,
-    marginTop: -30,
-    paddingTop: 26,
-    gap: 14,
+    overflow: 'hidden',
   },
   title: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     textAlign: 'center',
-    fontSize: 25,
-    lineHeight: 31,
-    fontWeight: '700',
-    letterSpacing: -0.5,
+    fontWeight: '500',
     color: theme.ink,
-    paddingHorizontal: 22,
   },
-  meta: { alignItems: 'center' },
-  name: { fontSize: 17, fontWeight: '600', color: '#3f2f26' },
-  tagline: { marginTop: 3, fontSize: 13, color: theme.inkSoft },
+  carousel: { position: 'absolute', left: 0, right: 0 },
+  name: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    fontWeight: '400',
+    color: theme.ink,
+  },
 
   cta: {
-    marginHorizontal: 22,
-    height: 62,
-    borderRadius: 999,
-    backgroundColor: theme.cta,
+    position: 'absolute',
+    left: '50%',
+    backgroundColor: theme.ink,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -237,14 +283,5 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: 'rgba(255,255,255,0.16)',
   },
-  ctaText: { color: '#fff', fontSize: 19, fontWeight: '600' },
-
-  ghost: {
-    textAlign: 'center',
-    color: theme.inkSoft,
-    fontSize: 14,
-    fontWeight: '500',
-    textDecorationLine: 'underline',
-  },
-  ghostHidden: { opacity: 0 },
+  ctaText: { color: '#fff', fontWeight: '500' },
 })

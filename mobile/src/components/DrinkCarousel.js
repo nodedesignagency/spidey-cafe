@@ -1,13 +1,25 @@
 import { useEffect, useRef } from 'react'
 import { Animated, Pressable, StyleSheet, useWindowDimensions } from 'react-native'
 import CupIcon from './CupIcon'
+import { scale, spec } from '../theme'
 
 // Horizontal snap list. The centred cup is the selection, so a swipe and a tap
-// are the same gesture. Scale and opacity interpolate off scroll position, so
-// the neighbours ease in as you drag rather than popping at the snap point.
+// are the same gesture.
+//
+// The Figma row steps the cups down through three sizes either side of centre
+// (172 / 132.9 / 103.6) and overlaps them by 41pt, which leaves the gaps between
+// centres uneven. A snap carousel needs one uniform step, so spec.cupStep is
+// that spacing averaged — it puts the centre and both outer cups within a point
+// or two of the frame. Sizes interpolate off scroll position, so the neighbours
+// also ease in as you drag rather than popping at the snap point.
 export default function DrinkCarousel({ drinks, index, onIndex, disabled }) {
   const { width } = useWindowDimensions()
-  const ITEM = Math.round(width * 0.24)
+  const s = scale(width)
+
+  const CUP = Math.round(spec.cupBox * s) // tallest cup; CupIcon is 1.32 tall
+  const cupW = CUP / 1.32
+  const ITEM = Math.round(spec.cupStep * s)
+
   const listRef = useRef(null)
   const scrollX = useRef(new Animated.Value(0)).current
 
@@ -26,7 +38,8 @@ export default function DrinkCarousel({ drinks, index, onIndex, disabled }) {
       snapToInterval={ITEM}
       decelerationRate="fast"
       disableIntervalMomentum
-      contentContainerStyle={{ paddingHorizontal: (width - ITEM) / 2 }}
+      style={{ height: CUP, flexGrow: 0 }}
+      contentContainerStyle={{ paddingHorizontal: (width - ITEM) / 2, alignItems: 'center' }}
       getItemLayout={(_, i) => ({ length: ITEM, offset: ITEM * i, index: i })}
       initialScrollIndex={index}
       keyExtractor={(d) => d.id}
@@ -40,26 +53,29 @@ export default function DrinkCarousel({ drinks, index, onIndex, disabled }) {
         if (clamped !== index) onIndex(clamped)
       }}
       renderItem={({ item, index: i }) => {
-        const range = [(i - 1) * ITEM, i * ITEM, (i + 1) * ITEM]
-        const scale = scrollX.interpolate({
+        const range = [-2, -1, 0, 1, 2].map((d) => (i + d) * ITEM)
+        const [c0, c1, c2] = spec.cupScales
+        const scaleAnim = scrollX.interpolate({
           inputRange: range,
-          outputRange: [0.74, 1, 0.74],
+          outputRange: [c2, c1, c0, c1, c2],
           extrapolate: 'clamp',
         })
         const opacity = scrollX.interpolate({
           inputRange: range,
-          outputRange: [0.28, 1, 0.28],
+          outputRange: [spec.sideOpacity, spec.sideOpacity, 1, spec.sideOpacity, spec.sideOpacity],
           extrapolate: 'clamp',
         })
         return (
-          <Animated.View style={[styles.item, { width: ITEM, opacity, transform: [{ scale }] }]}>
+          <Animated.View
+            style={[styles.item, { width: ITEM, opacity, transform: [{ scale: scaleAnim }] }]}
+          >
             <Pressable
               onPress={() => onIndex(i)}
               accessibilityRole="button"
               accessibilityLabel={item.name}
               hitSlop={8}
             >
-              <CupIcon drink={item} size={ITEM * 1.5} />
+              <CupIcon drink={item} size={cupW} />
             </Pressable>
           </Animated.View>
         )
