@@ -27,6 +27,13 @@ jobs:
         with:
           ref: ${{ inputs.target_branch }}
 
+      - name: Install ffmpeg
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends ffmpeg
+          ffmpeg -version | head -1
+
       - name: Download stills and clip
         env:
           EMPTY_URL: ${{ inputs.empty_url }}
