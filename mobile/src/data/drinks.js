@@ -1,0 +1,79 @@
+// Each drink drives both the carousel cup art and the ingredients named during
+// the pour. One shared pour clip plays underneath, so the ingredient list is
+// what makes each drink's build feel bespoke.
+
+export const drinks = [
+  {
+    id: 'vanilla-silk',
+    name: 'Vanilla silk',
+    tagline: 'Smooth, quiet, dangerous',
+    liquid: ['#E8D5B8', '#D4B896'],
+    cream: '#FFF8EE',
+    drizzle: '#C9A227',
+    ingredients: [
+      { label: 'Vanilla bean', color: '#E8D5B8' },
+      { label: 'Steamed milk', color: '#FFF8EE' },
+      { label: 'Ice', color: '#DDEAF0' },
+      { label: 'Whipped cream', color: '#FFFDF8' },
+    ],
+  },
+  {
+    id: 'caramel-swing',
+    name: 'Caramel swing',
+    tagline: 'Sticky landing',
+    liquid: ['#C88A4A', '#A6672F'],
+    cream: '#FFF3E2',
+    drizzle: '#8A4B12',
+    ingredients: [
+      { label: 'Espresso', color: '#3B2016' },
+      { label: 'Caramel', color: '#C8792B' },
+      { label: 'Ice', color: '#DDEAF0' },
+      { label: 'Whipped cream', color: '#FFF3E2' },
+    ],
+  },
+  {
+    id: 'double-chocochip',
+    name: 'Double chocochip',
+    tagline: 'Twice the bite',
+    liquid: ['#6B4030', '#3E2318'],
+    cream: '#F6E7D8',
+    drizzle: '#2B160E',
+    ingredients: [
+      { label: 'Cocoa', color: '#4A2A1C' },
+      { label: 'Choco chips', color: '#241009' },
+      { label: 'Milk', color: '#FFF8EE' },
+      { label: 'Ice', color: '#DDEAF0' },
+      { label: 'Whipped cream', color: '#F6E7D8' },
+    ],
+  },
+  {
+    id: 'web-mocha',
+    name: 'Web mocha',
+    tagline: 'Spun to order',
+    liquid: ['#5A3A2A', '#2E1A12'],
+    cream: '#F2E3D0',
+    drizzle: '#1C0F08',
+    ingredients: [
+      { label: 'Espresso', color: '#2E1A12' },
+      { label: 'Dark cocoa', color: '#3A1F14' },
+      { label: 'Milk', color: '#FFF8EE' },
+      { label: 'Whipped cream', color: '#F2E3D0' },
+    ],
+  },
+  {
+    id: 'midnight-venom',
+    name: 'Midnight venom',
+    tagline: 'Bites back',
+    liquid: ['#2A2140', '#120E1F'],
+    cream: '#E6E0F2',
+    drizzle: '#0A0713',
+    ingredients: [
+      { label: 'Black cold brew', color: '#120E1F' },
+      { label: 'Blackberry', color: '#3B1D48' },
+      { label: 'Ice', color: '#DDEAF0' },
+      { label: 'Whipped cream', color: '#E6E0F2' },
+    ],
+  },
+]
+
+export const DEFAULT_INDEX = 2 // Double chocochip, matching the Figma frame
