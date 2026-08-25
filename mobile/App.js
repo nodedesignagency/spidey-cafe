@@ -19,6 +19,11 @@ import { scale, spec, theme } from './src/theme'
 
 const POUR_MS = 5000 // length of the generated clip; also the no-video fallback
 
+// Temporary: prints the player's real state over the hero while it pours, so a
+// failure to play can be read off the screen instead of guessed at. Flip to
+// false once the clip is confirmed working.
+const DEBUG_VIDEO = true
+
 const EMPTY = require('./assets/cup-empty.jpg')
 const FILLED = require('./assets/cup-filled.jpg')
 const POUR = require('./assets/pour.mp4')
@@ -33,6 +38,7 @@ function Screen() {
 
   const [index, setIndex] = useState(DEFAULT_INDEX)
   const [phase, setPhase] = useState('idle') // idle | pouring | ready
+  const [diag, setDiag] = useState('starting…')
   const fallbackRef = useRef(null)
 
   const drink = drinks[index]
@@ -49,12 +55,45 @@ function Screen() {
     setPhase('ready')
   }, [])
 
-  // The clip ending is the real signal; the timer in pour() is only a safety net.
+  // The clip ending is the real signal; the timer below is only a safety net.
   useEffect(() => {
     if (!player?.addListener) return undefined
-    const sub = player.addListener('playToEnd', () => finish())
-    return () => sub?.remove?.()
+    const ended = player.addListener('playToEnd', () => finish())
+    const status = player.addListener('statusChange', (e) => {
+      if (e?.error) setDiag(`error: ${e.error.message ?? String(e.error)}`)
+    })
+    return () => {
+      ended?.remove?.()
+      status?.remove?.()
+    }
   }, [player, finish])
+
+  // Start playback from an effect, not from the tap handler: the VideoView is
+  // only mounted once phase is 'pouring', and the handler runs a render earlier
+  // than that, so play() was being called before there was a view to render into.
+  useEffect(() => {
+    if (phase !== 'pouring') return undefined
+    try {
+      player.currentTime = 0
+    } catch {
+      /* not loaded yet; it starts from zero anyway */
+    }
+    try {
+      player.play()
+    } catch (e) {
+      setDiag(`play threw: ${e?.message ?? e}`)
+    }
+    if (!DEBUG_VIDEO) return undefined
+    const id = setInterval(() => {
+      try {
+        const t = typeof player.currentTime === 'number' ? player.currentTime.toFixed(1) : '?'
+        setDiag(`${player.status} · playing=${player.playing} · t=${t}`)
+      } catch (e) {
+        setDiag(`read threw: ${e?.message ?? e}`)
+      }
+    }, 300)
+    return () => clearInterval(id)
+  }, [phase, player])
 
   const reset = useCallback(() => {
     clearTimeout(fallbackRef.current)
@@ -74,19 +113,7 @@ function Screen() {
       reset()
       return
     }
-    setPhase('pouring')
-    // Separate try blocks on purpose: seeking throws while the player is still
-    // loading, and sharing a block meant play() was skipped entirely.
-    try {
-      player.currentTime = 0
-    } catch {
-      /* not loaded yet; it will start from zero anyway */
-    }
-    try {
-      player.play()
-    } catch {
-      /* fall through to the fallback timer below */
-    }
+    setPhase('pouring') // the effect above starts playback once the view exists
     sweep.setValue(0)
     Animated.timing(sweep, {
       toValue: 1,
@@ -140,6 +167,11 @@ function Screen() {
             active={phase === 'pouring'}
             stepMs={POUR_MS / drink.ingredients.length}
           />
+          {DEBUG_VIDEO && phase === 'pouring' && (
+            <View style={styles.diagChip}>
+              <Text style={styles.diagText}>{diag}</Text>
+            </View>
+          )}
           {phase === 'ready' && (
             <>
               <View style={styles.readyChip}>
@@ -232,6 +264,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(28, 18, 12, 0.72)',
   },
   readyText: { color: '#fff', fontSize: 13, fontWeight: '500' },
+  diagChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.78)',
+  },
+  diagText: { color: '#7CFFB2', fontSize: 11, fontWeight: '600' },
   again: {
     color: '#fff',
     fontSize: 13,
