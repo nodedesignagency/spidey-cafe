@@ -1,0 +1,99 @@
+name: Sync drink art
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: Branch to commit the cut-outs on
+        required: true
+      url_vanilla_silk:
+        required: true
+      url_caramel_swing:
+        required: true
+      url_double_chocochip:
+        required: true
+      url_web_mocha:
+        required: true
+      url_midnight_venom:
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_branch }}
+
+      - run: pip install --quiet Pillow
+
+      - name: Fetch the background-removed cut-outs
+        env:
+          U1: ${{ inputs.url_vanilla_silk }}
+          U2: ${{ inputs.url_caramel_swing }}
+          U3: ${{ inputs.url_double_chocochip }}
+          U4: ${{ inputs.url_web_mocha }}
+          U5: ${{ inputs.url_midnight_venom }}
+        run: |
+          set -euo pipefail
+          mkdir -p raw
+          curl -sSfL "$U1" -o raw/vanilla-silk.png
+          curl -sSfL "$U2" -o raw/caramel-swing.png
+          curl -sSfL "$U3" -o raw/double-chocochip.png
+          curl -sSfL "$U4" -o raw/web-mocha.png
+          curl -sSfL "$U5" -o raw/midnight-venom.png
+          ls -la raw
+
+      - name: Verify the sources are the exact images that were reviewed
+        run: |
+          set -euo pipefail
+          cat > raw/SHA256SUMS <<'EOF'
+          cc5b30da15a1988a6698d45f9f0e5006812e5d8bb6a6a64cee395481596ba67b  raw/vanilla-silk.png
+          efc49962fe303fd98d975980d601f87d3030f5157f9feec71b9704c7ed0386a6  raw/caramel-swing.png
+          73a8f15d5ac67331cd81b69486b71f1eec6785e702a3b903d33397f632a412b9  raw/double-chocochip.png
+          c11cf63d6af1f7248e320e45b1c2734df975edf573edf9f584109898652d1423  raw/web-mocha.png
+          e224f8a3d884b887e10be1cc32819935759d197d00097312f5b70c21268c8b55  raw/midnight-venom.png
+          EOF
+          sha256sum -c raw/SHA256SUMS
+
+      - name: Crop to the shared box and resize
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from PIL import Image
+          import os
+          # One crop box for all five so their relative scale is preserved, and the
+          # top is trimmed to a straw stub the way the Figma cups are framed.
+          BOX = (466, 500, 1259, 2072)
+          TARGET_H = 560  # the 176pt carousel row at 3x density
+          os.makedirs('mobile/assets', exist_ok=True)
+          os.makedirs('public/media/drinks', exist_ok=True)
+          for n in ['vanilla-silk','caramel-swing','double-chocochip','web-mocha','midnight-venom']:
+              im = Image.open(f'raw/{n}.png').convert('RGBA').crop(BOX)
+              w = round(im.width * TARGET_H / im.height)
+              im = im.resize((w, TARGET_H), Image.LANCZOS)
+              assert im.size == (282, 560), f'{n} came out {im.size}, expected (282, 560)'
+              im.save(f'mobile/assets/drink-{n}.png', optimize=True)
+              im.save(f'public/media/drinks/{n}.png', optimize=True)
+              print(n, im.size)
+          PY
+          ls -la mobile/assets
+
+      - name: Commit to the target branch
+        env:
+          TARGET: ${{ inputs.target_branch }}
+        run: |
+          set -euo pipefail
+          rm -rf raw
+          git config user.email noreply@anthropic.com
+          git config user.name Claude
+          git add mobile/assets public/media/drinks
+          if git diff --cached --quiet; then
+            echo "art already present and identical; nothing to commit"
+            exit 0
+          fi
+          git commit -m "Add drink cut-outs for the carousel" -m "Generated with Magnific, background removed, then cropped to a shared box so the five cups keep their relative scale. Committed by sync-drink-art.yml."
+          git push origin "HEAD:$TARGET"
