@@ -17,11 +17,14 @@ import IngredientTicker from './src/components/IngredientTicker'
 import { scale, spec, theme } from './src/theme'
 
 // The clip runs 5.08s at normal speed, which reads as rushed for something the
-// whole screen is watching, so it plays slower. POUR_MS is the resulting
-// wall-clock length, used only as the fallback when nothing is rendering.
+// whole screen is watching, so it plays slower.
 const PLAYBACK_RATE = 0.8
 const CLIP_SECONDS = 5.08
-const POUR_MS = Math.round((CLIP_SECONDS / PLAYBACK_RATE) * 1000)
+// The drink is visually finished about 80% of the way through the clip; the rest
+// is the completed cup just sitting there. Ending on that beat is why the bar
+// now fills exactly as the pour completes instead of running on into dead frames.
+const END_AT = 0.82
+const POUR_MS = Math.round(((CLIP_SECONDS * END_AT) / PLAYBACK_RATE) * 1000)
 
 const EMPTY = require('./assets/cup-empty.jpg')
 const FILLED = require('./assets/cup-filled.jpg')
@@ -39,9 +42,10 @@ export default function App() {
 
   const [index, setIndex] = useState(DEFAULT_INDEX)
   const [phase, setPhase] = useState('idle') // idle | pouring | ready
-  // How far through the clip we are, 0 to 1. Read from the player when it is
-  // really rendering, so the ingredient chips cannot drift out of sync with it.
-  const [progress, setProgress] = useState(0)
+  // Which ingredient is showing, rather than raw progress: this is state, and
+  // storing a number that changes every tick re-rendered the whole screen -
+  // carousel included - dozens of times per pour. It changes ~4 times instead.
+  const [stepIdx, setStepIdx] = useState(0)
   // Only hide the still once the clip is genuinely rendering, so a playback
   // failure leaves the photo up rather than an empty hero.
   const [videoLive, setVideoLive] = useState(false)
@@ -60,12 +64,17 @@ export default function App() {
 
   const finish = useCallback(() => {
     clearTimeout(fallbackRef.current)
+    try {
+      player.pause() // nothing left worth showing; stop it under the still
+    } catch {
+      /* not ready; nothing to stop */
+    }
     setVideoLive(false)
-    setProgress(0)
+    setStepIdx(0)
     setPhase('ready')
-  }, [])
+  }, [player])
 
-  // The clip ending is the real signal; the timer below is only a safety net.
+  // The clip ending is a backstop now that the pour ends early on END_AT.
   useEffect(() => {
     if (!player?.addListener) return undefined
     const ended = player.addListener('playToEnd', () => finish())
@@ -96,26 +105,35 @@ export default function App() {
         live = player.status === 'readyToPlay' && player.playing === true
         const d = player.duration
         // Progress through the clip itself, so slowing playback slows the chips
-        // with it. Wall-clock is only the fallback when nothing is rendering.
+        // with it. Wall-clock is only the fallback when nothing is rendering,
+        // scaled to END_AT so both paths finish on the same number.
         if (live && d > 0) p = player.currentTime / d
-        else p = (Date.now() - startedAt.current) / POUR_MS
+        else p = ((Date.now() - startedAt.current) / POUR_MS) * END_AT
       } catch {
-        p = (Date.now() - startedAt.current) / POUR_MS
+        p = ((Date.now() - startedAt.current) / POUR_MS) * END_AT
       }
-      const clamped = Math.max(0, Math.min(1, p))
+      const raw = Math.max(0, Math.min(1, p))
       setVideoLive(live)
-      setProgress(clamped)
-      // The bar is driven by the clip's own position rather than its own
-      // animation, so it cannot finish before or after the video does. The short
-      // tween just smooths the gap between samples.
+
+      // Ingredient `at` values are fractions of the whole clip, so they read raw.
+      let next = 0
+      drink.ingredients.forEach((ing, i) => {
+        if (raw >= ing.at) next = i
+      })
+      setStepIdx((cur) => (cur === next ? cur : next))
+
+      // The bar spans up to END_AT, so it reaches full exactly as the pour does.
+      // Animated drives the width natively, so this does not re-render anything.
       Animated.timing(sweep, {
-        toValue: clamped,
+        toValue: Math.min(1, raw / END_AT),
         duration: 130,
         useNativeDriver: false,
       }).start()
+
+      if (raw >= END_AT) finish()
     }, 120)
     return () => clearInterval(id)
-  }, [phase, player, sweep])
+  }, [phase, player, sweep, drink, finish])
 
   const reset = useCallback(() => {
     clearTimeout(fallbackRef.current)
@@ -127,7 +145,7 @@ export default function App() {
     }
     sweep.setValue(0)
     setVideoLive(false)
-    setProgress(0)
+    setStepIdx(0)
     setPhase('idle')
   }, [player, sweep])
 
@@ -170,22 +188,30 @@ export default function App() {
           nativeControls={false}
         />
 
-        {/* The still covers the video, and simply gets out of the way during the
-            pour. Fading an Image is reliable; hiding a native video view is not. */}
+        {/* Both stills stay mounted and are toggled by opacity. Swapping one
+            Image's source instead makes it reload, which showed as a flash at
+            the moment the pour finished. */}
         <Image
-          source={phase === 'ready' ? FILLED : EMPTY}
+          source={EMPTY}
           style={[
             { position: 'absolute', top: 0, left: 0, width, height: heroH },
-            phase === 'pouring' && videoLive && { opacity: 0 },
+            (phase === 'ready' || (phase === 'pouring' && videoLive)) && { opacity: 0 },
+          ]}
+          resizeMode="cover"
+        />
+        <Image
+          source={FILLED}
+          style={[
+            { position: 'absolute', top: 0, left: 0, width, height: heroH },
+            phase !== 'ready' && { opacity: 0 },
           ]}
           resizeMode="cover"
         />
 
         <View style={[styles.caption, { bottom: spec.sheetRadius * s + 24 }]}>
           <IngredientTicker
-            drink={drink}
+            ingredient={drink.ingredients[stepIdx]}
             active={phase === 'pouring'}
-            progress={progress}
           />
         </View>
       </View>

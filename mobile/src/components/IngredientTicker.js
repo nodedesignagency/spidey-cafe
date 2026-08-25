@@ -1,20 +1,15 @@
 import { StyleSheet, Text, View } from 'react-native'
 
-// Shows one ingredient at a time, chosen by how far through the clip the video
-// actually is rather than by a timer of its own — so the label always matches
-// what is on screen, whatever speed the clip is playing at.
-export default function IngredientTicker({ drink, active, progress }) {
-  if (!active) return null
-
-  let ing = drink.ingredients[0]
-  for (const candidate of drink.ingredients) {
-    if (progress >= candidate.at) ing = candidate
-  }
+// Renders whichever ingredient the screen decided is current. Choosing it lives
+// upstream, where the clip's position is already known, so this only re-renders
+// when the ingredient actually changes rather than on every poll tick.
+export default function IngredientTicker({ ingredient, active }) {
+  if (!active || !ingredient) return null
 
   return (
     <View style={styles.chip}>
-      <View style={[styles.dot, { backgroundColor: ing.color }]} />
-      <Text style={styles.label}>Adding {ing.label.toLowerCase()}</Text>
+      <View style={[styles.dot, { backgroundColor: ingredient.color }]} />
+      <Text style={styles.label}>Adding {ingredient.label.toLowerCase()}</Text>
     </View>
   )
 }
