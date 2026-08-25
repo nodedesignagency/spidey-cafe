@@ -39,6 +39,9 @@ function Screen() {
   const [index, setIndex] = useState(DEFAULT_INDEX)
   const [phase, setPhase] = useState('idle') // idle | pouring | ready
   const [diag, setDiag] = useState('starting…')
+  // Only hide the still once the clip is genuinely rendering, so a playback
+  // failure leaves the photo up rather than an empty hero.
+  const [videoLive, setVideoLive] = useState(false)
   const fallbackRef = useRef(null)
 
   const drink = drinks[index]
@@ -49,9 +52,11 @@ function Screen() {
   })
 
   const sweep = useRef(new Animated.Value(0)).current
+  const videoBox = useRef('?')
 
   const finish = useCallback(() => {
     clearTimeout(fallbackRef.current)
+    setVideoLive(false)
     setPhase('ready')
   }, [])
 
@@ -68,9 +73,9 @@ function Screen() {
     }
   }, [player, finish])
 
-  // Start playback from an effect, not from the tap handler: the VideoView is
-  // only mounted once phase is 'pouring', and the handler runs a render earlier
-  // than that, so play() was being called before there was a view to render into.
+  // Start playback from an effect, not from the tap handler: the handler runs a
+  // render earlier than the pour state, so play() was being called before the
+  // view had been laid out for it.
   useEffect(() => {
     if (phase !== 'pouring') return undefined
     try {
@@ -83,15 +88,17 @@ function Screen() {
     } catch (e) {
       setDiag(`play threw: ${e?.message ?? e}`)
     }
-    if (!DEBUG_VIDEO) return undefined
     const id = setInterval(() => {
       try {
-        const t = typeof player.currentTime === 'number' ? player.currentTime.toFixed(1) : '?'
-        setDiag(`${player.status} · playing=${player.playing} · t=${t}`)
+        setVideoLive(player.status === 'readyToPlay' && player.playing === true)
+        if (DEBUG_VIDEO) {
+          const t = typeof player.currentTime === 'number' ? player.currentTime.toFixed(1) : '?'
+          setDiag(`${player.status} · playing=${player.playing} · t=${t} · view=${videoBox.current}`)
+        }
       } catch (e) {
-        setDiag(`read threw: ${e?.message ?? e}`)
+        if (DEBUG_VIDEO) setDiag(`read threw: ${e?.message ?? e}`)
       }
-    }, 300)
+    }, 250)
     return () => clearInterval(id)
   }, [phase, player])
 
@@ -104,6 +111,7 @@ function Screen() {
       /* player may not be ready yet */
     }
     sweep.setValue(0)
+    setVideoLive(false)
     setPhase('idle')
   }, [player, sweep])
 
@@ -139,26 +147,32 @@ function Screen() {
       <StatusBar style="light" />
 
       <View style={[styles.hero, { height: heroH }]}>
-        <Image
-          source={phase === 'ready' ? FILLED : EMPTY}
-          style={styles.layer}
-          resizeMode="cover"
+        {/* The video stays mounted for the whole session and sits underneath.
+            Mounting it only for the pour gave a player that reported
+            readyToPlay/playing but drew nothing - an iOS video surface wants to
+            exist before it is asked to show frames. Explicit pixel sizes rather
+            than percentages, for the same reason. */}
+        <VideoView
+          player={player}
+          style={{ position: 'absolute', top: 0, left: 0, width, height: heroH }}
+          contentFit="cover"
+          nativeControls={false}
+          onLayout={(e) => {
+            const { width: w, height: h } = e.nativeEvent.layout
+            videoBox.current = `${Math.round(w)}x${Math.round(h)}`
+          }}
         />
 
-        {/* Mounted only while it plays. A native video surface sitting in a
-            z-stack is exactly the thing that misbehaves on iOS, and it has
-            nothing to show in the other two states anyway. */}
-        {phase === 'pouring' && (
-          <VideoView
-            player={player}
-            style={styles.layer}
-            contentFit="cover"
-            nativeControls={false}
-            allowsFullscreen={false}
-            allowsPictureInPicture={false}
-            pointerEvents="none"
-          />
-        )}
+        {/* The still covers the video, and simply gets out of the way during the
+            pour. Fading an Image is reliable; hiding a native video view is not. */}
+        <Image
+          source={phase === 'ready' ? FILLED : EMPTY}
+          style={[
+            { position: 'absolute', top: 0, left: 0, width, height: heroH },
+            phase === 'pouring' && videoLive && { opacity: 0 },
+          ]}
+          resizeMode="cover"
+        />
 
         {/* Status lives over the hero, so the sheet keeps the frame's exact geometry. */}
         <View style={[styles.caption, { bottom: spec.sheetRadius * s + 24 }]}>
@@ -254,7 +268,6 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.backdrop },
 
   hero: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: theme.heroFallback },
-  layer: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
 
   caption: { position: 'absolute', left: 0, right: 0, alignItems: 'center', gap: 10 },
   readyChip: {
