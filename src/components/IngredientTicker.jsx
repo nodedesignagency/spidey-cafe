@@ -1,31 +1,19 @@
-import { useEffect, useState } from 'react'
-
-// One ingredient at a time, in recipe order — this is what makes each drink
-// read differently over a single shared clip. Faking per-drink particles on
-// top of photoreal footage just looks like debris.
-export default function IngredientTicker({ drink, active, stepMs }) {
-  const [step, setStep] = useState(0)
-
-  useEffect(() => {
-    if (!active) {
-      setStep(0)
-      return undefined
-    }
-    setStep(0)
-    const id = setInterval(() => {
-      setStep((s) => Math.min(s + 1, drink.ingredients.length - 1))
-    }, stepMs)
-    return () => clearInterval(id)
-  }, [active, drink, stepMs])
-
-  if (!active) return null
-
-  const ing = drink.ingredients[step]
+// The label that rides inside the pour bar: a dot in the ingredient's colour and
+// the name of what is going in. Renders bare — no background of its own —
+// because the bar it sits in is the chrome.
+//
+// Which ingredient is showing is decided by the pour's own progress through the
+// clip, up in App, so the names track what is actually happening on screen
+// rather than a timer running alongside it.
+export default function IngredientTicker({ ingredient, active }) {
+  if (!active || !ingredient) return null
 
   return (
-    <span key={ing.label} className="chip chip--live">
-      <span className="chip__dot" style={{ background: ing.color }} />
-      Adding {ing.label.toLowerCase()}
+    // Keyed on the label so each ingredient gets its own entrance rather than
+    // the text swapping inside a node that is already on screen.
+    <span className="ticker" key={ingredient.label}>
+      <span className="ticker__dot" style={{ background: ingredient.color }} />
+      Adding {ingredient.label.toLowerCase()}
     </span>
   )
 }

@@ -83,5 +83,14 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.55)',
   },
-  label: { color: '#fff', fontWeight: '500' },
+  // The sweep passing underneath runs from near-black to near-white depending on
+  // the ingredient, so the label carries its own shadow rather than relying on
+  // the bar's ink being behind it.
+  label: {
+    color: '#fff',
+    fontWeight: '500',
+    textShadowColor: 'rgba(20,12,8,0.55)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
 })

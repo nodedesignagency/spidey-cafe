@@ -48,20 +48,28 @@ body {
   background: var(--sheet);
   border-radius: var(--radius-phone);
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
   box-shadow: 0 40px 90px rgba(0, 0, 0, 0.55);
 }
 
 /* ---------- hero stage ---------- */
 
+/* Framed behind the sheet while it is up, and grown to the whole phone once it
+   has gone. Both heights are measured in App and set as custom properties, so
+   the overlap that lets the photo show through the sheet's rounded corners
+   follows the sheet's real, content-driven height. Growing the box re-runs
+   object-fit, so the cup swells into the space rather than being scaled up. */
 .stage {
-  position: relative;
-  flex: 1 1 auto;
-  min-height: 0;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--hero-h, 62%);
   overflow: hidden;
   background: #e8dcc8;
+  transition: height var(--t-bleed) cubic-bezier(0.22, 1, 0.36, 1);
 }
+
+.phone--down .stage { height: var(--hero-full, 100%); }
 
 .stage__layer {
   position: absolute;
@@ -75,13 +83,16 @@ body {
 
 .stage--idle    .stage__layer--empty,
 .stage--pouring .stage__layer--video,
-.stage--ready   .stage__layer--filled { opacity: 1; }
+.stage--ready   .stage__layer--filled,
+.stage--taken   .stage__layer--filled { opacity: 1; }
 
 /* The empty still stays lit under the video so the first frame never flashes. */
 .stage--pouring .stage__layer--empty { opacity: 1; transition: none; }
 .stage--pouring .stage__layer--video { z-index: 2; }
 
-.stage--idle .stage__layer--empty { animation: sway 7s ease-in-out infinite; }
+.phone:not(.phone--down) .stage--idle .stage__layer--empty {
+  animation: sway 7s ease-in-out infinite;
+}
 
 @keyframes sway {
   0%, 100% { transform: scale(1.03) translate3d(0, 0, 0) rotate(0deg); }
@@ -97,39 +108,7 @@ body {
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0.28), transparent);
 }
 
-.stage__caption {
-  position: absolute;
-  left: 0; right: 0; bottom: 46px;
-  z-index: 4;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  pointer-events: none;
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  border-radius: 999px;
-  background: rgba(28, 18, 12, 0.72);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.2px;
-  backdrop-filter: blur(8px);
-  animation: rise 420ms ease both;
-}
-
-@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
-
-.chip__dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
-}
+@keyframes rise { from { opacity: 0; transform: translateY(10px) scale(0.92); } }
 
 /* ---------- status bar ---------- */
 
@@ -180,17 +159,35 @@ body {
 
 /* ---------- bottom sheet ---------- */
 
+/* The transition declared here is the one that runs on the way back up; the
+   collapse has its own below, because a transition is read off the state being
+   transitioned *to*. */
 .sheet {
-  position: relative;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 6;
-  margin-top: -28px;
   padding: 26px 22px 26px;
+  transition:
+    transform var(--t-restore) cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 160ms ease 120ms;
   background: var(--sheet);
   border-radius: var(--radius-sheet) var(--radius-sheet) var(--radius-phone) var(--radius-phone);
   display: flex;
   flex-direction: column;
   gap: 14px;
-  flex: 0 0 auto;
+}
+
+.phone--down .sheet {
+  transform: translateY(102%) scale(0.88);
+  opacity: 0;
+  pointer-events: none;
+  /* Holds fully opaque for most of the drop and only fades over the last of it,
+     so what you see is a card leaving rather than one dissolving in place. */
+  transition:
+    transform var(--t-collapse) cubic-bezier(0.4, 0.02, 0.2, 1),
+    opacity 114ms ease 266ms;
 }
 
 .sheet__title {
@@ -292,36 +289,232 @@ body {
 .cta:disabled { cursor: default; opacity: 0.92; }
 .cta span { position: relative; z-index: 2; }
 
-.cta__bar {
+
+/* ---------- pour bar ---------- */
+
+/* The web twin of mobile/src/components/PourBar.js. Same coordinates as the
+   sheet's CTA above — 22px in, 26px off the bottom, 64 tall — so when the sheet
+   drops away the button appears to stay behind and become the progress bar. */
+.pourbar {
   position: absolute;
-  left: 0; top: 0; bottom: 0;
-  z-index: 1;
-  width: 100%;
-  transform-origin: left center;
-  background: rgba(255, 255, 255, 0.16);
-  animation: sweep linear both;
+  left: 22px;
+  right: 22px;
+  bottom: 26px;
+  z-index: 7;
+  height: 64px;
+  border: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--cta);
+  color: #fff;
+  font-family: inherit;
+  cursor: default;
+  transition: background 220ms ease;
 }
 
-@keyframes sweep { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.pourbar--ready { cursor: pointer; }
+.pourbar--ready:active { background: var(--cta-press); }
+.pourbar--taken { background: #5a4433; }
 
-.ghost--hidden { visibility: hidden; }
+/* A translucent wash rather than a solid fill: the label sits on top of it, and
+   a solid fill in the ingredient's colour took the white text with it every time
+   an ingredient was pale — and half of them are. The colour still drives the bar,
+   as a tint under the wash and as the dot in the label. */
+.pourbar__fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  transition: width 130ms linear, opacity 320ms ease;
+}
 
-.ghost {
-  border: 0;
-  background: none;
-  color: var(--ink-soft);
-  font-family: inherit;
-  font-size: 14px;
+.pourbar--ready .pourbar__fill,
+.pourbar--taken .pourbar__fill { opacity: 0; }
+
+.pourbar__tint { position: absolute; inset: 0; opacity: 0.38; }
+.pourbar__wash { position: absolute; inset: 0; background: rgba(255, 255, 255, 0.17); }
+
+/* A soft shoulder behind a hard bright line: together they read as the head of
+   the pour travelling across the bar. */
+.pourbar__edge-soft {
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  width: 20px;
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.pourbar__edge {
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  width: 2.5px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+/* Both labels are stacked in one grid cell and dip, so the last ingredient can
+   leave before the finished-drink label arrives — crossing them over instead
+   left the two legible on top of each other. */
+.pourbar__labels { position: absolute; inset: 0; display: grid; place-items: center; }
+
+/* The sweep passing underneath runs from near-black to near-white depending on
+   the ingredient, so the labels carry their own shadow rather than relying on
+   the bar's ink being behind them. */
+.pourbar__label {
+  grid-area: 1 / 1;
+  display: flex;
+  align-items: center;
+  text-shadow: 0 1px 3px rgba(20, 12, 8, 0.55);
+}
+
+.pourbar__label--pour { opacity: 1; transition: opacity 180ms ease; }
+
+.pourbar__label--done {
+  opacity: 0;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: 0.1px;
+  transition: opacity 260ms ease 230ms;
+}
+
+.pourbar--ready .pourbar__label--pour,
+.pourbar--taken .pourbar__label--pour { opacity: 0; }
+
+.pourbar--ready .pourbar__label--done,
+.pourbar--taken .pourbar__label--done { opacity: 1; }
+
+.ticker {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: #fff;
+  font-size: 17px;
   font-weight: 500;
-  padding: 2px;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  white-space: nowrap;
+  animation: rise 300ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+
+/* Ringed so the dot still reads when the sweep passes underneath it. */
+.ticker__dot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+}
+
+/* ---------- edge glow ---------- */
+
+.stage__glow {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  opacity: var(--glow-strength, 0);
+  transition: opacity 420ms ease;
+  background:
+    linear-gradient(to right, color-mix(in srgb, var(--glow) 74%, transparent), transparent 44%),
+    linear-gradient(to left,  color-mix(in srgb, var(--glow) 74%, transparent), transparent 44%),
+    linear-gradient(to top,   color-mix(in srgb, var(--glow) 88%, transparent), transparent 36%);
+}
+
+/* ---------- celebration ---------- */
+
+.burst {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+/* Dark, not white: the hero is a cream-coloured wall, so white rings were only
+   visible for the fraction of their arc that crossed the cup. Here they double
+   as the web reacting to the weight landing in it. */
+.burst__ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 50%;
+  aspect-ratio: 1;
+  margin: -25% 0 0 -25%;
+  border-style: solid;
+  border-radius: 50%;
+  opacity: 0;
+  animation: ring 840ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+.burst__bit {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  border-radius: 2px;
+  opacity: 0;
+  animation: bit 1400ms cubic-bezier(0.25, 0.8, 0.4, 1) both;
+}
+
+.burst__bit--round { border-radius: 50%; }
+
+@keyframes ring {
+  0%   { opacity: 0; transform: scale(0.15); }
+  14%  { opacity: 0.95; }
+  100% { opacity: 0; transform: scale(2.3); }
+}
+
+/* Out and up, then gravity takes over. */
+@keyframes bit {
+  0%   { opacity: 0; transform: translate3d(0, 0, 0) rotate(0deg); }
+  8%   { opacity: 1; }
+  45%  { transform: translate3d(var(--dx), var(--dy), 0) rotate(calc(var(--spin) * 0.45)); }
+  62%  { opacity: 1; }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--dx), calc(var(--dy) + var(--fall)), 0) rotate(var(--spin));
+  }
+}
+
+/* Settles rather than fading out, so it is still there once the burst has
+   cleared. Over the photo, not in a sheet — and clear of the bar below it. */
+.burst__pill {
+  position: absolute;
+  left: 50%;
+  bottom: 112px;
+  translate: -50% 0;
+  padding: 11px 18px;
+  border-radius: 999px;
+  background: rgba(28, 18, 12, 0.78);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.1px;
+  white-space: nowrap;
+  backdrop-filter: blur(8px);
+  animation: pill 900ms cubic-bezier(0.2, 0.9, 0.3, 1) 260ms both;
+}
+
+@keyframes pill {
+  0%   { opacity: 0; transform: translateY(14px) scale(0.86); }
+  55%  { opacity: 1; transform: translateY(0) scale(1.05); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .stage__layer, .chip, .cta__bar, .stage--idle .stage__layer--empty {
+  .stage,
+  .stage__layer,
+  .sheet,
+  .pourbar,
+  .pourbar__fill,
+  .pourbar__label,
+  .ticker,
+  .stage__glow,
+  .burst__ring,
+  .burst__bit,
+  .burst__pill,
+  .phone:not(.phone--down) .stage--idle .stage__layer--empty {
     animation: none !important;
     transition: none !important;
   }
+
+  /* The burst is the one thing with nothing left once its motion is removed, so
+     it is dropped rather than left as a ring of dots frozen on the cup. */
+  .burst__ring, .burst__bit { display: none; }
+  .burst__pill { opacity: 1; }
 }

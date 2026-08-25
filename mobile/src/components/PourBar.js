@@ -169,5 +169,11 @@ const styles = StyleSheet.create({
 
   labels: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
   labelLayer: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-  ctaText: { color: '#fff', fontWeight: '500' },
+  ctaText: {
+    color: '#fff',
+    fontWeight: '500',
+    textShadowColor: 'rgba(20,12,8,0.55)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
 })

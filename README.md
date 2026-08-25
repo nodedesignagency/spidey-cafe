@@ -36,21 +36,39 @@ desktop viewport and badly on an actual handset — you get a phone inside a
 phone, two status bars, and a squashed hero. Use `mobile/` for anything on a
 device.
 
+It runs the same four-phase flow as `mobile/`, in CSS rather than `Animated`.
+Where it still differs is the carousel art, below.
+
 ## The interaction
 
-Three states, driven by one `phase` value:
+Four states, driven by one `phase` value:
 
-| phase | hero | CTA |
+| phase | screen | bar |
 | --- | --- | --- |
-| `idle` | empty cup in the web | **Spin it up** |
-| `pouring` | the pour clip, with an ingredient ticker | **Spinning…** (progress sweep) |
-| `ready` | the finished drink | **Add to bag** + *Swing another* |
+| `idle` | empty cup above the sheet | **Spin it up**, in the sheet |
+| `pouring` | sheet gone, pour clip full bleed | the ingredient going in, filling |
+| `ready` | the finished drink, confetti | **Take it to go** |
+| `taken` | the finished drink | **Enjoy it ✓**, then back to `idle` |
 
-Swiping the carousel mid-pour rewinds to `idle` — changing your mind cancels the
-build rather than leaving the hero out of sync with the selection.
+Tapping the CTA collapses the sheet: it shrinks and drops off the bottom, and
+the hero opens into the space it leaves, so the pour gets the whole screen.
 
-The pour has a hard fallback timer, so if the clip fails to load or autoplay is
-blocked the flow still completes and reaches `ready`.
+The button does not move. The bar that shows the pour is laid out at exactly the
+coordinates the sheet's CTA occupies, in the same ink at the same size, so the
+handover across the collapse is invisible — the button appears to stay behind
+while the white falls away, and then fills as the drink is built. The ingredient
+ticker lives inside it: one element names what is going in and shows how far
+along it is.
+
+The sheet stays down for `ready` and `taken` and only springs back once the
+drink has been taken. So the carousel is unreachable from the moment the pour
+starts — the mid-pour rewind is still in the code, and still fires if the
+selection changes, but there is no longer a gesture that reaches it.
+
+Playback waits for the hero to finish opening, and the pour ends at 82% of the
+clip, where the drink is visually finished and the rest is the cup just sitting
+there. There is also a hard fallback timer, so if the clip fails to load or
+autoplay is blocked the flow still completes and reaches `ready`.
 
 ## Matching the frame
 
@@ -83,17 +101,27 @@ more generated clip per drink.
 
 ## Cup art
 
-The carousel cups are vector, tinted per drink, so adding a drink costs no image
-generation — `src/components/CupIcon.jsx` on web, the `react-native-svg` port in
-`mobile/`. The roundel is an original web motif, not any existing coffee chain's
-mark.
+The two builds differ here. `mobile/` uses the generated cut-outs in
+`mobile/assets/drink-*.png`, cropped to one shared box so the five cups keep
+their relative scale. The web build still draws the vector cup in
+`src/components/CupIcon.jsx` — tinted per drink, so adding a drink there costs no
+image generation. The vector roundel is an original web motif, not any existing
+coffee chain's mark.
 
 ## Verified
 
-From a clean clone of this branch: `npm install` then an iOS bundle, with all
-three assets resolving. The layout and the full `idle -> pouring -> ready ->
-reset` path were driven at 393x852 through the react-native-web build, with the
-rendered geometry measured against the frame.
+Both builds bundle from a clean clone, and both were driven through the full
+`idle -> pouring -> ready -> taken -> idle` path with the geometry measured at
+each step: the bar lands at the same coordinates as the sheet's CTA in both the
+sheet and floating states, the hero re-frames 523 -> 852 and back, and the bar
+dips to nothing between the last ingredient and *Take it to go* rather than
+showing both at once.
+
+`mobile/` was driven at 393x852 through the react-native-web build. The collapse
+and the burst are both too quick for screenshots, so they were checked frame by
+frame off a recording of the run. Headless Chromium has no H.264, so on that
+path the pour runs on its fallback timer — which is what verifies the fallback.
+The web build plays the WebM, so its pour was driven off real playback.
 
 Not verified: playback on a real device, and touch panning of the carousel.
 Neither headless Chromium nor a simulator exercises real touch, so those want a
