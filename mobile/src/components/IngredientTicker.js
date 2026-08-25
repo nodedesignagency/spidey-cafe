@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native'
 
+// The label that rides inside the pour bar: a dot in the ingredient's colour and
+// the name of what is going in. Renders bare - no background of its own - because
+// the bar it sits in is the chrome.
+//
 // Fades and lifts itself in and out, and dips between ingredients, rather than
 // snapping. `shown` lags the prop on purpose: the outgoing label has to stay
 // mounted long enough to animate away.
-export default function IngredientTicker({ ingredient, active }) {
+export default function IngredientTicker({ ingredient, active, fontSize = 16 }) {
   const anim = useRef(new Animated.Value(0)).current
   const [shown, setShown] = useState(null)
   const shownLabel = useRef(null)
@@ -51,33 +55,33 @@ export default function IngredientTicker({ ingredient, active }) {
   return (
     <Animated.View
       style={[
-        styles.chip,
+        styles.row,
         {
           opacity: anim,
           transform: [
-            { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) },
-            { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) },
+            { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
+            { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) },
           ],
         },
       ]}
     >
       <View style={[styles.dot, { backgroundColor: shown.color }]} />
-      <Text style={styles.label}>Adding {shown.label.toLowerCase()}</Text>
+      <Text style={[styles.label, { fontSize }]} numberOfLines={1}>
+        Adding {shown.label.toLowerCase()}
+      </Text>
     </Animated.View>
   )
 }
 
 const styles = StyleSheet.create({
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 999,
-    backgroundColor: 'rgba(28, 18, 12, 0.72)',
+  row: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  // Ringed so the dot still reads when the sweep passes underneath it.
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.55)',
   },
-  dot: { width: 9, height: 9, borderRadius: 5 },
-  label: { color: '#fff', fontSize: 13, fontWeight: '500' },
+  label: { color: '#fff', fontWeight: '500' },
 })

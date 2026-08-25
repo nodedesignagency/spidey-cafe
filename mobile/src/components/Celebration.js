@@ -12,9 +12,9 @@ import { Animated, Easing, StyleSheet, Text, View } from 'react-native'
 // Dark, not white: the hero is a cream-coloured wall, so white rings were only
 // visible for the fraction of their arc that crossed the cup.
 const RINGS = [
-  { delay: 0.0, hue: 'rgba(60,44,33,0.55)', weight: 2 },
-  { delay: 0.12, hue: 'rgba(60,44,33,0.38)', weight: 1.75 },
-  { delay: 0.24, hue: 'rgba(60,44,33,0.22)', weight: 1.5 },
+  { delay: 0.0, hue: 'rgba(60,44,33,0.7)', weight: 3 },
+  { delay: 0.12, hue: 'rgba(60,44,33,0.5)', weight: 2.5 },
+  { delay: 0.24, hue: 'rgba(60,44,33,0.32)', weight: 2 },
 ]
 
 // Deterministic scatter: the same drink bursts the same way every time.
@@ -27,13 +27,16 @@ function scatter(seed, count) {
   return Array.from({ length: count }, (_, i) => {
     // Bias upward - things thrown off a cup go up before they fall.
     const angle = -Math.PI / 2 + (rand() - 0.5) * Math.PI * 1.15
-    const dist = 70 + rand() * 130
+    // Sized and thrown for a full-screen hero. At the old behind-the-sheet
+    // height these were half this far and half this big, which on the whole
+    // screen read as a handful of crumbs rather than as the drink landing.
+    const dist = 100 + rand() * 210
     return {
       key: i,
       dx: Math.cos(angle) * dist,
       dy: Math.sin(angle) * dist,
-      fall: 30 + rand() * 90,
-      size: 5 + rand() * 6,
+      fall: 45 + rand() * 130,
+      size: 8 + rand() * 10,
       spin: (rand() - 0.5) * 540,
       round: rand() > 0.5,
       lead: rand() * 0.18,
@@ -41,12 +44,15 @@ function scatter(seed, count) {
   })
 }
 
-export default function Celebration({ active, drink, width, heroH, bottom }) {
+export default function Celebration({ active, drink, width, cy, span, bottom }) {
   const t = useRef(new Animated.Value(0)).current
 
   const bits = useMemo(() => {
-    const palette = [drink.liquid[0], drink.liquid[1], drink.cream, drink.drizzle, '#FFFFFF']
-    return scatter(drink.id.length * 7919 + drink.name.length, 20).map((b) => ({
+    // Weighted to the light end of the drink's palette: the hero is a sunlit
+    // cream wall and dark crumbs simply disappeared into the cup and its shadow.
+    // The one dark entry is what reads back against the wall.
+    const palette = [drink.cream, '#FFFFFF', drink.liquid[0], drink.cream, drink.drizzle]
+    return scatter(drink.id.length * 7919 + drink.name.length, 26).map((b) => ({
       ...b,
       color: palette[b.key % palette.length],
     }))
@@ -68,10 +74,11 @@ export default function Celebration({ active, drink, width, heroH, bottom }) {
 
   if (!active) return null
 
-  // Roughly where the cup sits inside the cover-cropped hero.
+  // The cup's centre and the space to ripple through are passed in: the hero is
+  // full-bleed by the time this fires, so they no longer follow from the
+  // behind-the-sheet height this used to be measured against.
   const cx = width / 2
-  const cy = heroH * 0.55
-  const ringSize = Math.min(width, heroH) * 0.42
+  const ringSize = span * 0.5
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">

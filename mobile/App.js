@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Animated,
-  Image,
+  Easing,
   Pressable,
   StyleSheet,
   Text,
@@ -13,9 +13,10 @@ import { useVideoPlayer, VideoView } from 'expo-video'
 
 import { drinks, DEFAULT_INDEX } from './src/data/drinks'
 import DrinkCarousel from './src/components/DrinkCarousel'
-import IngredientTicker from './src/components/IngredientTicker'
 import Celebration from './src/components/Celebration'
-import { scale, spec, theme } from './src/theme'
+import EdgeGlow from './src/components/EdgeGlow'
+import PourBar from './src/components/PourBar'
+import { motion, scale, spec, theme } from './src/theme'
 
 // The clip runs 5.08s at normal speed, which reads as rushed for something the
 // whole screen is watching, so it plays slower.
@@ -31,6 +32,12 @@ const EMPTY = require('./assets/cup-empty.jpg')
 const FILLED = require('./assets/cup-filled.jpg')
 const POUR = require('./assets/pour.mp4')
 
+// Every value here drives a layout-affecting style - a height, or a width
+// percentage - so they all run off the JS driver. Mixing the two is what let the
+// sheet and the photo drift apart part-way through the collapse.
+const anim = (value, toValue, duration, easing) =>
+  Animated.timing(value, { toValue, duration, easing, useNativeDriver: false })
+
 export default function App() {
   const { width, height } = useWindowDimensions()
   const s = scale(width)
@@ -38,7 +45,9 @@ export default function App() {
   // bottom of the screen, which clears the home indicator. Adding the inset on
   // top of that was what left a band of white under the button.
   const sheetH = spec.sheetH * s
-  // The hero runs under the sheet's rounded corners so the photo shows through them.
+  // Where the hero is framed while the sheet is up: it runs under the sheet's
+  // rounded corners so the photo shows through them. Once the sheet drops the
+  // stills re-frame from this to the full screen.
   const heroH = height - sheetH + spec.sheetRadius * s
 
   const [index, setIndex] = useState(DEFAULT_INDEX)
@@ -55,6 +64,11 @@ export default function App() {
   // Only hide the still once the clip is genuinely rendering, so a playback
   // failure leaves the photo up rather than an empty hero.
   const [videoLive, setVideoLive] = useState(false)
+  // True once the hero has finished opening to full screen. Nothing about the
+  // pour starts before this: the video is framed full-bleed from the outset, so
+  // revealing it while the stills were still re-framing put a hard cut in the
+  // middle of the collapse.
+  const [expanded, setExpanded] = useState(false)
   const fallbackRef = useRef(null)
   const takenRef = useRef(null)
 
@@ -76,6 +90,11 @@ export default function App() {
   })
 
   const sweep = useRef(new Animated.Value(0)).current
+  // 1 = sheet sitting up, 0 = collapsed off the bottom.
+  const open = useRef(new Animated.Value(1)).current
+  // 0 = hero framed above the sheet, 1 = hero filling the screen.
+  const bleed = useRef(new Animated.Value(0)).current
+  const glow = useRef(new Animated.Value(0)).current
   const startedAt = useRef(0)
 
   // Guarded: both the fallback timer and the player's playToEnd listener can
@@ -91,8 +110,9 @@ export default function App() {
     }
     setVideoLive(false)
     setStepIdx(0)
+    anim(glow, 0.5, 420, Easing.out(Easing.quad)).start()
     goTo('ready')
-  }, [player, goTo])
+  }, [player, glow, goTo])
 
   // The clip ending is a backstop now that the pour ends early on END_AT.
   useEffect(() => {
@@ -101,11 +121,11 @@ export default function App() {
     return () => ended?.remove?.()
   }, [player, finish])
 
-  // Start playback from an effect, not from the tap handler: the handler runs a
-  // render earlier than the pour state, so play() was being called before the
-  // view had been laid out for it.
+  // Playback starts once the hero has finished opening, not on the tap: the
+  // handler runs a render earlier than the pour state, and the collapse needs
+  // the screen to itself before the clip is worth showing.
   useEffect(() => {
-    if (phase !== 'pouring') return undefined
+    if (phase !== 'pouring' || !expanded) return undefined
     try {
       player.currentTime = 0
     } catch {
@@ -118,6 +138,9 @@ export default function App() {
       /* fall through to the fallback timer below */
     }
     startedAt.current = Date.now()
+    // Guarantees the flow reaches 'ready' even if the clip never renders.
+    fallbackRef.current = setTimeout(finish, POUR_MS + 350)
+
     const id = setInterval(() => {
       let live = false
       let p = 0
@@ -143,17 +166,17 @@ export default function App() {
       setStepIdx((cur) => (cur === next ? cur : next))
 
       // The bar spans up to END_AT, so it reaches full exactly as the pour does.
-      // Animated drives the width natively, so this does not re-render anything.
-      Animated.timing(sweep, {
-        toValue: Math.min(1, raw / END_AT),
-        duration: 130,
-        useNativeDriver: false,
-      }).start()
+      anim(sweep, Math.min(1, raw / END_AT), 130, Easing.linear).start()
 
       if (raw >= END_AT) finish()
     }, 120)
-    return () => clearInterval(id)
-  }, [phase, player, sweep, finish])
+
+    return () => {
+      clearInterval(id)
+      clearTimeout(fallbackRef.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, expanded, player, sweep, finish])
 
   const reset = useCallback(() => {
     clearTimeout(fallbackRef.current)
@@ -164,11 +187,30 @@ export default function App() {
     } catch {
       /* player may not be ready yet */
     }
-    sweep.setValue(0)
     setVideoLive(false)
     setStepIdx(0)
-    goTo('idle')
-  }, [player, sweep, goTo])
+    setExpanded(false)
+
+    // Cancelling mid-pour has nothing left worth looking at, so the screen drops
+    // back immediately. Finishing a drink keeps the bar and the photo up until
+    // the sheet has risen over them, so the last thing you see is the drink.
+    const cancelled = phaseRef.current === 'pouring'
+    if (cancelled) {
+      sweep.setValue(0)
+      goTo('idle')
+    }
+
+    Animated.parallel([
+      anim(open, 1, motion.restore, Easing.out(Easing.cubic)),
+      anim(bleed, 0, motion.restore, Easing.inOut(Easing.cubic)),
+      anim(glow, 0, motion.restore * 0.7, Easing.in(Easing.quad)),
+    ]).start(() => {
+      if (cancelled || phaseRef.current === 'idle') return
+      sweep.setValue(0)
+      goTo('idle')
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [player, open, bleed, glow, sweep, goTo])
 
   const pour = () => {
     if (phase === 'pouring' || phase === 'taken') return
@@ -179,16 +221,26 @@ export default function App() {
       takenRef.current = setTimeout(reset, 1400)
       return
     }
-    goTo('pouring') // the effect above starts playback once the view exists
+    goTo('pouring')
     sweep.setValue(0)
-    fallbackRef.current = setTimeout(finish, POUR_MS + 350)
+    setExpanded(false)
+    // The sheet shrinks away faster than the photo opens, so the hero is still
+    // settling once the white has gone.
+    Animated.parallel([
+      anim(open, 0, motion.collapse, Easing.bezier(0.4, 0.02, 0.2, 1)),
+      anim(bleed, 1, motion.bleed, Easing.out(Easing.cubic)),
+      anim(glow, 1, motion.bleed, Easing.out(Easing.quad)),
+    ]).start(({ finished }) => finished && setExpanded(true))
   }
 
   // Changing your mind mid-pour rewinds the whole thing. Reads the ref, not the
-  // state, so a swipe can never leave a stale pour timer running behind it.
+  // state, so a swipe can never leave a stale pour timer running behind it, and
+  // keys on `index` alone so a new `reset` identity cannot trip it on its own.
+  const resetRef = useRef(reset)
+  resetRef.current = reset
   useEffect(() => {
-    if (phaseRef.current !== 'idle') reset()
-  }, [index, reset])
+    if (phaseRef.current !== 'idle') resetRef.current()
+  }, [index])
 
   useEffect(
     () => () => {
@@ -198,77 +250,91 @@ export default function App() {
     [],
   )
 
-  // "Add to bag" clashed with the moment: the screen has just said the drink is
-  // ready, and ready is not the same beat as adding a line to a cart. The verb
-  // is about collecting it now.
-  const ctaLabel = {
-    pouring: 'Spinning…',
-    ready: 'Take it to go',
-    taken: 'Enjoy it ✓',
-  }[phase] ?? 'Spin it up'
+  const heroFrame = bleed.interpolate({ inputRange: [0, 1], outputRange: [heroH, height] })
+  const barBottom = spec.ctaBottom * s
+  const barH = spec.ctaH * s
 
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
 
-      <View style={[styles.hero, { height: heroH }]}>
-        {/* The video stays mounted for the whole session and sits underneath.
-            Mounting it only for the pour gave a player that reported
-            readyToPlay/playing but drew nothing - an iOS video surface wants to
-            exist before it is asked to show frames. Explicit pixel sizes rather
-            than percentages, for the same reason. */}
+      <View style={styles.hero}>
+        {/* The video stays mounted for the whole session and sits underneath, at
+            the size it will be shown at - full screen. Mounting it only for the
+            pour gave a player that reported readyToPlay/playing but drew nothing;
+            resizing it mid-pour risks the same, so the stills do the re-framing
+            and the video simply waits behind them until they have caught up. */}
         <VideoView
           player={player}
-          style={{ position: 'absolute', top: 0, left: 0, width, height: heroH }}
+          style={{ position: 'absolute', top: 0, left: 0, width, height }}
           contentFit="cover"
           nativeControls={false}
         />
 
         {/* Both stills stay mounted and are toggled by opacity. Swapping one
             Image's source instead makes it reload, which showed as a flash at
-            the moment the pour finished. */}
-        <Image
+            the moment the pour finished. Their height is what re-frames the hero:
+            growing the box re-runs the cover crop, so the cup swells into the
+            space the sheet leaves rather than being scaled up out of it. */}
+        <Animated.Image
           source={EMPTY}
           style={[
-            { position: 'absolute', top: 0, left: 0, width, height: heroH },
+            styles.still,
+            { width, height: heroFrame },
             (phase === 'ready' ||
               phase === 'taken' ||
-              (phase === 'pouring' && videoLive)) && { opacity: 0 },
+              (phase === 'pouring' && expanded && videoLive)) && { opacity: 0 },
           ]}
           resizeMode="cover"
         />
-        <Image
+        <Animated.Image
           source={FILLED}
           style={[
-            { position: 'absolute', top: 0, left: 0, width, height: heroH },
+            styles.still,
+            { width, height: heroFrame },
             phase !== 'ready' && phase !== 'taken' && { opacity: 0 },
           ]}
           resizeMode="cover"
+        />
+
+        <EdgeGlow
+          width={width}
+          height={height}
+          color={drink.drizzle}
+          opacity={Animated.multiply(
+            glow,
+            sweep.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }),
+          )}
         />
 
         <Celebration
           active={phase === 'ready' || phase === 'taken'}
           drink={drink}
           width={width}
-          heroH={heroH}
-          bottom={spec.sheetRadius * s + 24}
+          cy={height * 0.5}
+          span={width}
+          bottom={barBottom + barH + 22 * s}
         />
-
-        <View style={[styles.caption, { bottom: spec.sheetRadius * s + 24 }]}>
-          <IngredientTicker
-            ingredient={drink.ingredients[stepIdx]}
-            active={phase === 'pouring'}
-          />
-        </View>
       </View>
 
-      <View
+      <Animated.View
+        pointerEvents={phase === 'idle' ? 'auto' : 'none'}
         style={[
           styles.sheet,
           {
             height: sheetH,
             borderTopLeftRadius: spec.sheetRadius * s,
             borderTopRightRadius: spec.sheetRadius * s,
+            opacity: open.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0, 1, 1] }),
+            transform: [
+              {
+                translateY: open.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [sheetH * 1.02, 0],
+                }),
+              },
+              { scale: open.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1] }) },
+            ],
           },
         ]}
       >
@@ -281,7 +347,7 @@ export default function App() {
             drinks={drinks}
             index={index}
             onIndex={setIndex}
-            disabled={phase === 'pouring'}
+            disabled={phase !== 'idle'}
           />
         </View>
 
@@ -289,33 +355,41 @@ export default function App() {
           {drink.name}
         </Text>
 
+        {/* Sits at the exact coordinates PourBar takes over, in the same ink at
+            the same size, so the handover across the collapse is invisible: the
+            button appears to stay put while the sheet falls away behind it. */}
         <Pressable
           onPress={pour}
-          disabled={phase === 'pouring' || phase === 'taken'}
+          disabled={phase !== 'idle'}
           style={({ pressed }) => [
             styles.cta,
-            phase === 'taken' && { backgroundColor: theme.ctaDone },
             {
               width: spec.ctaW * s,
-              height: spec.ctaH * s,
+              height: barH,
               borderRadius: spec.ctaRadius * s,
-              bottom: spec.ctaBottom * s,
+              bottom: barBottom,
               marginLeft: -(spec.ctaW * s) / 2,
             },
             pressed && { backgroundColor: theme.ctaPress },
           ]}
         >
-          {phase === 'pouring' && (
-            <Animated.View
-              style={[
-                styles.sweep,
-                { width: sweep.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) },
-              ]}
-            />
-          )}
-          <Text style={[styles.ctaText, { fontSize: spec.ctaTextSize * s }]}>{ctaLabel}</Text>
+          <Text style={[styles.ctaText, { fontSize: spec.ctaTextSize * s }]}>Spin it up</Text>
         </Pressable>
-      </View>
+      </Animated.View>
+
+      {phase !== 'idle' && (
+        <PourBar
+          phase={phase}
+          ingredient={drink.ingredients[stepIdx]}
+          sweep={sweep}
+          onPress={pour}
+          width={spec.ctaW * s}
+          height={barH}
+          radius={spec.ctaRadius * s}
+          bottom={barBottom}
+          fontSize={spec.ctaTextSize * s}
+        />
+      )}
     </View>
   )
 }
@@ -323,9 +397,8 @@ export default function App() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.backdrop },
 
-  hero: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: theme.heroFallback },
-
-  caption: { position: 'absolute', left: 0, right: 0, alignItems: 'center', gap: 10 },
+  hero: { ...StyleSheet.absoluteFillObject, backgroundColor: theme.heroFallback },
+  still: { position: 'absolute', top: 0, left: 0 },
 
   sheet: {
     position: 'absolute',
@@ -360,13 +433,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-  },
-  sweep: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(255,255,255,0.16)',
   },
   ctaText: { color: '#fff', fontWeight: '500' },
 })

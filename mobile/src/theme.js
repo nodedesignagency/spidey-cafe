@@ -41,4 +41,13 @@ export const spec = {
   sideOpacity: 0.2,
 }
 
+// The sheet drops away faster than the photo opens, so the hero is still
+// settling once the white is gone - the picture takes the screen rather than
+// the two moving as one block.
+export const motion = {
+  collapse: 380, // sheet shrinks and drops off the bottom
+  bleed: 620, // hero re-frames from behind-the-sheet to full screen
+  restore: 520, // sheet springs back up once the drink has been taken
+}
+
 export const scale = (width) => width / REF_W
