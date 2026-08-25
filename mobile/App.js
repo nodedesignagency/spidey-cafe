@@ -14,6 +14,7 @@ import { useVideoPlayer, VideoView } from 'expo-video'
 import { drinks, DEFAULT_INDEX } from './src/data/drinks'
 import DrinkCarousel from './src/components/DrinkCarousel'
 import IngredientTicker from './src/components/IngredientTicker'
+import Celebration from './src/components/Celebration'
 import { scale, spec, theme } from './src/theme'
 
 // The clip runs 5.08s at normal speed, which reads as rushed for something the
@@ -224,6 +225,14 @@ export default function App() {
             phase !== 'ready' && { opacity: 0 },
           ]}
           resizeMode="cover"
+        />
+
+        <Celebration
+          active={phase === 'ready'}
+          drink={drink}
+          width={width}
+          heroH={heroH}
+          bottom={spec.sheetRadius * s + 24}
         />
 
         <View style={[styles.caption, { bottom: spec.sheetRadius * s + 24 }]}>
