@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Animated,
+  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -41,9 +42,6 @@ function Screen() {
     p.loop = false
   })
 
-  const emptyOp = useRef(new Animated.Value(1)).current
-  const videoOp = useRef(new Animated.Value(0)).current
-  const filledOp = useRef(new Animated.Value(0)).current
   const sweep = useRef(new Animated.Value(0)).current
 
   const finish = useCallback(() => {
@@ -57,17 +55,6 @@ function Screen() {
     const sub = player.addListener('playToEnd', () => finish())
     return () => sub?.remove?.()
   }, [player, finish])
-
-  useEffect(() => {
-    const to = (v, value) =>
-      Animated.timing(v, { toValue: value, duration: 420, useNativeDriver: true })
-    Animated.parallel([
-      // The empty still stays lit under the video so the first frame never flashes.
-      to(emptyOp, phase === 'ready' ? 0 : 1),
-      to(videoOp, phase === 'pouring' ? 1 : 0),
-      to(filledOp, phase === 'ready' ? 1 : 0),
-    ]).start()
-  }, [phase, emptyOp, videoOp, filledOp])
 
   const reset = useCallback(() => {
     clearTimeout(fallbackRef.current)
@@ -88,11 +75,17 @@ function Screen() {
       return
     }
     setPhase('pouring')
+    // Separate try blocks on purpose: seeking throws while the player is still
+    // loading, and sharing a block meant play() was skipped entirely.
     try {
       player.currentTime = 0
+    } catch {
+      /* not loaded yet; it will start from zero anyway */
+    }
+    try {
       player.play()
     } catch {
-      /* fall through to the timer below */
+      /* fall through to the fallback timer below */
     }
     sweep.setValue(0)
     Animated.timing(sweep, {
@@ -119,20 +112,26 @@ function Screen() {
       <StatusBar style="light" />
 
       <View style={[styles.hero, { height: heroH }]}>
-        <Animated.Image source={EMPTY} style={[styles.layer, { opacity: emptyOp }]} />
+        <Image
+          source={phase === 'ready' ? FILLED : EMPTY}
+          style={styles.layer}
+          resizeMode="cover"
+        />
 
-        <Animated.View style={[styles.layer, { opacity: videoOp }]} pointerEvents="none">
+        {/* Mounted only while it plays. A native video surface sitting in a
+            z-stack is exactly the thing that misbehaves on iOS, and it has
+            nothing to show in the other two states anyway. */}
+        {phase === 'pouring' && (
           <VideoView
             player={player}
-            style={StyleSheet.absoluteFill}
+            style={styles.layer}
             contentFit="cover"
             nativeControls={false}
             allowsFullscreen={false}
             allowsPictureInPicture={false}
+            pointerEvents="none"
           />
-        </Animated.View>
-
-        <Animated.Image source={FILLED} style={[styles.layer, { opacity: filledOp }]} />
+        )}
 
         {/* Status lives over the hero, so the sheet keeps the frame's exact geometry. */}
         <View style={[styles.caption, { bottom: spec.sheetRadius * s + 24 }]}>
@@ -223,7 +222,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.backdrop },
 
   hero: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: theme.heroFallback },
-  layer: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%', resizeMode: 'cover' },
+  layer: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
 
   caption: { position: 'absolute', left: 0, right: 0, alignItems: 'center', gap: 10 },
   readyChip: {

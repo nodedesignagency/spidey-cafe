@@ -19,6 +19,9 @@ export const spec = {
   carouselTop: 64,
   cupBox: 176, // tallest cup in the row (height)
   cupBoxW: 172, // and its width
+  // Natural aspect of the generated cut-outs (width / height). They are taller
+  // than the frame's near-square cup boxes, so width follows from the row height.
+  cupAspect: 0.504,
   nameTop: 253, // 50% of the sheet + 68.5, per the frame
   nameSize: 14,
   ctaW: 350,

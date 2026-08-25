@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { Animated, Pressable, StyleSheet, useWindowDimensions } from 'react-native'
-import CupIcon from './CupIcon'
+import { Animated, Image, Pressable, StyleSheet, useWindowDimensions } from 'react-native'
+import { art } from '../data/art'
 import { scale, spec } from '../theme'
 
 // Horizontal snap list. The centred cup is the selection, so a swipe and a tap
@@ -16,8 +16,8 @@ export default function DrinkCarousel({ drinks, index, onIndex, disabled }) {
   const { width } = useWindowDimensions()
   const s = scale(width)
 
-  const CUP = Math.round(spec.cupBox * s) // tallest cup; CupIcon is 1.32 tall
-  const cupW = CUP / 1.32
+  const CUP = Math.round(spec.cupBox * s) // row height, from the frame
+  const cupW = Math.round(CUP * spec.cupAspect)
   const ITEM = Math.round(spec.cupStep * s)
 
   const listRef = useRef(null)
@@ -75,7 +75,11 @@ export default function DrinkCarousel({ drinks, index, onIndex, disabled }) {
               accessibilityLabel={item.name}
               hitSlop={8}
             >
-              <CupIcon drink={item} size={cupW} />
+              <Image
+                source={art[item.id]}
+                style={{ width: cupW, height: CUP }}
+                resizeMode="contain"
+              />
             </Pressable>
           </Animated.View>
         )
