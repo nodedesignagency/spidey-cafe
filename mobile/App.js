@@ -9,7 +9,6 @@ import {
   View,
 } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
-import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useVideoPlayer, VideoView } from 'expo-video'
 
 import { drinks, DEFAULT_INDEX } from './src/data/drinks'
@@ -19,8 +18,8 @@ import { scale, spec, theme } from './src/theme'
 
 // The clip runs 5.08s at normal speed, which reads as rushed for something the
 // whole screen is watching, so it plays slower. POUR_MS is the resulting
-// wall-clock length, used for the progress sweep and the no-video fallback.
-const PLAYBACK_RATE = 0.7
+// wall-clock length, used only as the fallback when nothing is rendering.
+const PLAYBACK_RATE = 0.8
 const CLIP_SECONDS = 5.08
 const POUR_MS = Math.round((CLIP_SECONDS / PLAYBACK_RATE) * 1000)
 
@@ -28,11 +27,13 @@ const EMPTY = require('./assets/cup-empty.jpg')
 const FILLED = require('./assets/cup-filled.jpg')
 const POUR = require('./assets/pour.mp4')
 
-function Screen() {
-  const insets = useSafeAreaInsets()
+export default function App() {
   const { width, height } = useWindowDimensions()
   const s = scale(width)
-  const sheetH = spec.sheetH * s + insets.bottom
+  // No safe-area inset added: the frame already positions the CTA 20pt off the
+  // bottom of the screen, which clears the home indicator. Adding the inset on
+  // top of that was what left a band of white under the button.
+  const sheetH = spec.sheetH * s
   // The hero runs under the sheet's rounded corners so the photo shows through them.
   const heroH = height - sheetH + spec.sheetRadius * s
 
@@ -101,11 +102,20 @@ function Screen() {
       } catch {
         p = (Date.now() - startedAt.current) / POUR_MS
       }
+      const clamped = Math.max(0, Math.min(1, p))
       setVideoLive(live)
-      setProgress(Math.max(0, Math.min(1, p)))
+      setProgress(clamped)
+      // The bar is driven by the clip's own position rather than its own
+      // animation, so it cannot finish before or after the video does. The short
+      // tween just smooths the gap between samples.
+      Animated.timing(sweep, {
+        toValue: clamped,
+        duration: 130,
+        useNativeDriver: false,
+      }).start()
     }, 120)
     return () => clearInterval(id)
-  }, [phase, player])
+  }, [phase, player, sweep])
 
   const reset = useCallback(() => {
     clearTimeout(fallbackRef.current)
@@ -129,11 +139,6 @@ function Screen() {
     }
     setPhase('pouring') // the effect above starts playback once the view exists
     sweep.setValue(0)
-    Animated.timing(sweep, {
-      toValue: 1,
-      duration: POUR_MS,
-      useNativeDriver: false,
-    }).start()
     fallbackRef.current = setTimeout(finish, POUR_MS + 350)
   }
 
@@ -176,23 +181,12 @@ function Screen() {
           resizeMode="cover"
         />
 
-        {/* Status lives over the hero, so the sheet keeps the frame's exact geometry. */}
         <View style={[styles.caption, { bottom: spec.sheetRadius * s + 24 }]}>
           <IngredientTicker
             drink={drink}
             active={phase === 'pouring'}
             progress={progress}
           />
-          {phase === 'ready' && (
-            <>
-              <View style={styles.readyChip}>
-                <Text style={styles.readyText}>Caught it. Ready in 4 min</Text>
-              </View>
-              <Pressable onPress={reset} hitSlop={10}>
-                <Text style={styles.again}>Swing another</Text>
-              </Pressable>
-            </>
-          )}
         </View>
       </View>
 
@@ -232,7 +226,7 @@ function Screen() {
               width: spec.ctaW * s,
               height: spec.ctaH * s,
               borderRadius: spec.ctaRadius * s,
-              bottom: spec.ctaBottom * s + insets.bottom,
+              bottom: spec.ctaBottom * s,
               marginLeft: -(spec.ctaW * s) / 2,
             },
             pressed && { backgroundColor: theme.ctaPress },
@@ -253,35 +247,12 @@ function Screen() {
   )
 }
 
-export default function App() {
-  return (
-    <SafeAreaProvider>
-      <Screen />
-    </SafeAreaProvider>
-  )
-}
-
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.backdrop },
 
   hero: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: theme.heroFallback },
 
   caption: { position: 'absolute', left: 0, right: 0, alignItems: 'center', gap: 10 },
-  readyChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 999,
-    backgroundColor: 'rgba(28, 18, 12, 0.72)',
-  },
-  readyText: { color: '#fff', fontSize: 13, fontWeight: '500' },
-  again: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '500',
-    textDecorationLine: 'underline',
-    textShadowColor: 'rgba(0,0,0,0.45)',
-    textShadowRadius: 6,
-  },
 
   sheet: {
     position: 'absolute',
