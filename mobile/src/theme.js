@@ -9,6 +9,7 @@ export const theme = {
   backdrop: '#c2b09d', // frame colour behind the hero
   heroFallback: '#e8dcc8',
   ctaPress: '#2d2018',
+  ctaDone: '#5a4433', // lifts a shade when the drink has been taken
 }
 
 export const spec = {

@@ -21,7 +21,11 @@ export default function DrinkCarousel({ drinks, index, onIndex, disabled }) {
   const ITEM = Math.round(spec.cupStep * s)
 
   const listRef = useRef(null)
-  const scrollX = useRef(new Animated.Value(0)).current
+  // Seeded to the starting offset, not zero. initialScrollIndex positions the
+  // list without emitting a scroll event, so a zero here left every size and
+  // opacity interpolation believing we were parked on the first cup - the wrong
+  // cup rendered large and full-colour until you happened to swipe.
+  const scrollX = useRef(new Animated.Value(index * ITEM)).current
 
   // Follow the selection when it changes from outside (e.g. a tap).
   useEffect(() => {
