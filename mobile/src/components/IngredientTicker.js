@@ -1,16 +1,69 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { Animated, Easing, StyleSheet, Text, View } from 'react-native'
 
-// Renders whichever ingredient the screen decided is current. Choosing it lives
-// upstream, where the clip's position is already known, so this only re-renders
-// when the ingredient actually changes rather than on every poll tick.
+// Fades and lifts itself in and out, and dips between ingredients, rather than
+// snapping. `shown` lags the prop on purpose: the outgoing label has to stay
+// mounted long enough to animate away.
 export default function IngredientTicker({ ingredient, active }) {
-  if (!active || !ingredient) return null
+  const anim = useRef(new Animated.Value(0)).current
+  const [shown, setShown] = useState(null)
+  const shownLabel = useRef(null)
+
+  useEffect(() => {
+    const enter = (ing, duration) => {
+      shownLabel.current = ing.label
+      setShown(ing)
+      anim.setValue(0)
+      Animated.timing(anim, {
+        toValue: 1,
+        duration,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start()
+    }
+
+    const leave = (duration, then) =>
+      Animated.timing(anim, {
+        toValue: 0,
+        duration,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: false,
+      }).start(({ finished }) => finished && then())
+
+    // Leaving entirely.
+    if (!active || !ingredient) {
+      if (shownLabel.current == null) return
+      leave(200, () => {
+        shownLabel.current = null
+        setShown(null)
+      })
+      return
+    }
+
+    if (shownLabel.current === ingredient.label) return
+    // First one in gets a slightly longer entrance; the rest dip and swap.
+    if (shownLabel.current == null) enter(ingredient, 300)
+    else leave(150, () => enter(ingredient, 240))
+  }, [active, ingredient, anim])
+
+  if (!shown) return null
 
   return (
-    <View style={styles.chip}>
-      <View style={[styles.dot, { backgroundColor: ingredient.color }]} />
-      <Text style={styles.label}>Adding {ingredient.label.toLowerCase()}</Text>
-    </View>
+    <Animated.View
+      style={[
+        styles.chip,
+        {
+          opacity: anim,
+          transform: [
+            { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) },
+            { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) },
+          ],
+        },
+      ]}
+    >
+      <View style={[styles.dot, { backgroundColor: shown.color }]} />
+      <Text style={styles.label}>Adding {shown.label.toLowerCase()}</Text>
+    </Animated.View>
   )
 }
 

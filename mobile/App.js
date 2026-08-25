@@ -42,6 +42,11 @@ export default function App() {
 
   const [index, setIndex] = useState(DEFAULT_INDEX)
   const [phase, setPhase] = useState('idle') // idle | pouring | ready
+  // Mirrors `phase` for the guards below. The swipe effect and the timers all
+  // fire outside the render that created them, so reading the state variable
+  // there gives whatever it was at the time - which is how the app could jump
+  // to 'ready' while sitting idle.
+  const phaseRef = useRef('idle')
   // Which ingredient is showing, rather than raw progress: this is state, and
   // storing a number that changes every tick re-rendered the whole screen -
   // carousel included - dozens of times per pour. It changes ~4 times instead.
@@ -52,6 +57,15 @@ export default function App() {
   const fallbackRef = useRef(null)
 
   const drink = drinks[index]
+  // Read inside the poll so the interval never has to list `drink` as a
+  // dependency; doing so restarted playback mid-pour whenever you swiped.
+  const drinkRef = useRef(drink)
+  drinkRef.current = drink
+
+  const goTo = useCallback((next) => {
+    phaseRef.current = next
+    setPhase(next)
+  }, [])
 
   const player = useVideoPlayer(POUR, (p) => {
     p.muted = true
@@ -62,8 +76,12 @@ export default function App() {
   const sweep = useRef(new Animated.Value(0)).current
   const startedAt = useRef(0)
 
+  // Guarded: both the fallback timer and the player's playToEnd listener can
+  // fire when nothing is pouring, and without this they dragged the whole screen
+  // into 'ready' - a finished drink appearing mid-swipe.
   const finish = useCallback(() => {
     clearTimeout(fallbackRef.current)
+    if (phaseRef.current !== 'pouring') return
     try {
       player.pause() // nothing left worth showing; stop it under the still
     } catch {
@@ -71,8 +89,8 @@ export default function App() {
     }
     setVideoLive(false)
     setStepIdx(0)
-    setPhase('ready')
-  }, [player])
+    goTo('ready')
+  }, [player, goTo])
 
   // The clip ending is a backstop now that the pour ends early on END_AT.
   useEffect(() => {
@@ -117,7 +135,7 @@ export default function App() {
 
       // Ingredient `at` values are fractions of the whole clip, so they read raw.
       let next = 0
-      drink.ingredients.forEach((ing, i) => {
+      drinkRef.current.ingredients.forEach((ing, i) => {
         if (raw >= ing.at) next = i
       })
       setStepIdx((cur) => (cur === next ? cur : next))
@@ -133,7 +151,7 @@ export default function App() {
       if (raw >= END_AT) finish()
     }, 120)
     return () => clearInterval(id)
-  }, [phase, player, sweep, drink, finish])
+  }, [phase, player, sweep, finish])
 
   const reset = useCallback(() => {
     clearTimeout(fallbackRef.current)
@@ -146,8 +164,8 @@ export default function App() {
     sweep.setValue(0)
     setVideoLive(false)
     setStepIdx(0)
-    setPhase('idle')
-  }, [player, sweep])
+    goTo('idle')
+  }, [player, sweep, goTo])
 
   const pour = () => {
     if (phase === 'pouring') return
@@ -155,16 +173,16 @@ export default function App() {
       reset()
       return
     }
-    setPhase('pouring') // the effect above starts playback once the view exists
+    goTo('pouring') // the effect above starts playback once the view exists
     sweep.setValue(0)
     fallbackRef.current = setTimeout(finish, POUR_MS + 350)
   }
 
-  // Changing your mind mid-pour rewinds the whole thing.
+  // Changing your mind mid-pour rewinds the whole thing. Reads the ref, not the
+  // state, so a swipe can never leave a stale pour timer running behind it.
   useEffect(() => {
-    if (phase !== 'idle') reset()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index])
+    if (phaseRef.current !== 'idle') reset()
+  }, [index, reset])
 
   useEffect(() => () => clearTimeout(fallbackRef.current), [])
 
