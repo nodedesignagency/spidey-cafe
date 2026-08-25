@@ -1,0 +1,51 @@
+name: Sync lockfiles
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: Branch to commit the lockfiles on
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_branch }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Resolve the Expo app
+        run: |
+          set -euo pipefail
+          cd mobile
+          npm install --package-lock-only --no-audit --no-fund
+          node -e "const l=require('./package-lock.json');console.log('mobile lockfile v'+l.lockfileVersion+', '+Object.keys(l.packages||{}).length+' entries')"
+
+      - name: Resolve the web app
+        run: |
+          set -euo pipefail
+          npm install --package-lock-only --no-audit --no-fund
+          node -e "const l=require('./package-lock.json');console.log('web lockfile v'+l.lockfileVersion+', '+Object.keys(l.packages||{}).length+' entries')"
+
+      - name: Commit
+        env:
+          TARGET: ${{ inputs.target_branch }}
+        run: |
+          set -euo pipefail
+          git config user.email noreply@anthropic.com
+          git config user.name Claude
+          git add package-lock.json mobile/package-lock.json
+          if git diff --cached --quiet; then
+            echo "lockfiles already committed and unchanged"
+            exit 0
+          fi
+          git commit -m "Add npm lockfiles for the web and Expo apps" -m "Resolved from the committed package.json files so installs are reproducible. Committed by sync-lockfiles.yml."
+          git push origin "HEAD:$TARGET"
