@@ -42,7 +42,7 @@ export default function App() {
   const heroH = height - sheetH + spec.sheetRadius * s
 
   const [index, setIndex] = useState(DEFAULT_INDEX)
-  const [phase, setPhase] = useState('idle') // idle | pouring | ready
+  const [phase, setPhase] = useState('idle') // idle | pouring | ready | taken
   // Mirrors `phase` for the guards below. The swipe effect and the timers all
   // fire outside the render that created them, so reading the state variable
   // there gives whatever it was at the time - which is how the app could jump
@@ -56,6 +56,7 @@ export default function App() {
   // failure leaves the photo up rather than an empty hero.
   const [videoLive, setVideoLive] = useState(false)
   const fallbackRef = useRef(null)
+  const takenRef = useRef(null)
 
   const drink = drinks[index]
   // Read inside the poll so the interval never has to list `drink` as a
@@ -156,6 +157,7 @@ export default function App() {
 
   const reset = useCallback(() => {
     clearTimeout(fallbackRef.current)
+    clearTimeout(takenRef.current)
     try {
       player.pause()
       player.currentTime = 0
@@ -169,9 +171,12 @@ export default function App() {
   }, [player, sweep, goTo])
 
   const pour = () => {
-    if (phase === 'pouring') return
+    if (phase === 'pouring' || phase === 'taken') return
     if (phase === 'ready') {
-      reset()
+      // Acknowledge the tap before clearing. Previously this reset straight to
+      // idle, so taking the drink looked identical to nothing happening.
+      goTo('taken')
+      takenRef.current = setTimeout(reset, 1400)
       return
     }
     goTo('pouring') // the effect above starts playback once the view exists
@@ -185,10 +190,22 @@ export default function App() {
     if (phaseRef.current !== 'idle') reset()
   }, [index, reset])
 
-  useEffect(() => () => clearTimeout(fallbackRef.current), [])
+  useEffect(
+    () => () => {
+      clearTimeout(fallbackRef.current)
+      clearTimeout(takenRef.current)
+    },
+    [],
+  )
 
-  const ctaLabel =
-    phase === 'pouring' ? 'Spinning…' : phase === 'ready' ? 'Add to bag' : 'Spin it up'
+  // "Add to bag" clashed with the moment: the screen has just said the drink is
+  // ready, and ready is not the same beat as adding a line to a cart. The verb
+  // is about collecting it now.
+  const ctaLabel = {
+    pouring: 'Spinning…',
+    ready: 'Take it to go',
+    taken: 'Enjoy it ✓',
+  }[phase] ?? 'Spin it up'
 
   return (
     <View style={styles.root}>
@@ -214,7 +231,9 @@ export default function App() {
           source={EMPTY}
           style={[
             { position: 'absolute', top: 0, left: 0, width, height: heroH },
-            (phase === 'ready' || (phase === 'pouring' && videoLive)) && { opacity: 0 },
+            (phase === 'ready' ||
+              phase === 'taken' ||
+              (phase === 'pouring' && videoLive)) && { opacity: 0 },
           ]}
           resizeMode="cover"
         />
@@ -222,13 +241,13 @@ export default function App() {
           source={FILLED}
           style={[
             { position: 'absolute', top: 0, left: 0, width, height: heroH },
-            phase !== 'ready' && { opacity: 0 },
+            phase !== 'ready' && phase !== 'taken' && { opacity: 0 },
           ]}
           resizeMode="cover"
         />
 
         <Celebration
-          active={phase === 'ready'}
+          active={phase === 'ready' || phase === 'taken'}
           drink={drink}
           width={width}
           heroH={heroH}
@@ -272,9 +291,10 @@ export default function App() {
 
         <Pressable
           onPress={pour}
-          disabled={phase === 'pouring'}
+          disabled={phase === 'pouring' || phase === 'taken'}
           style={({ pressed }) => [
             styles.cta,
+            phase === 'taken' && { backgroundColor: theme.ctaDone },
             {
               width: spec.ctaW * s,
               height: spec.ctaH * s,
