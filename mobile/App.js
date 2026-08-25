@@ -17,12 +17,12 @@ import DrinkCarousel from './src/components/DrinkCarousel'
 import IngredientTicker from './src/components/IngredientTicker'
 import { scale, spec, theme } from './src/theme'
 
-const POUR_MS = 5000 // length of the generated clip; also the no-video fallback
-
-// Temporary: prints the player's real state over the hero while it pours, so a
-// failure to play can be read off the screen instead of guessed at. Flip to
-// false once the clip is confirmed working.
-const DEBUG_VIDEO = true
+// The clip runs 5.08s at normal speed, which reads as rushed for something the
+// whole screen is watching, so it plays slower. POUR_MS is the resulting
+// wall-clock length, used for the progress sweep and the no-video fallback.
+const PLAYBACK_RATE = 0.7
+const CLIP_SECONDS = 5.08
+const POUR_MS = Math.round((CLIP_SECONDS / PLAYBACK_RATE) * 1000)
 
 const EMPTY = require('./assets/cup-empty.jpg')
 const FILLED = require('./assets/cup-filled.jpg')
@@ -38,7 +38,9 @@ function Screen() {
 
   const [index, setIndex] = useState(DEFAULT_INDEX)
   const [phase, setPhase] = useState('idle') // idle | pouring | ready
-  const [diag, setDiag] = useState('starting…')
+  // How far through the clip we are, 0 to 1. Read from the player when it is
+  // really rendering, so the ingredient chips cannot drift out of sync with it.
+  const [progress, setProgress] = useState(0)
   // Only hide the still once the clip is genuinely rendering, so a playback
   // failure leaves the photo up rather than an empty hero.
   const [videoLive, setVideoLive] = useState(false)
@@ -49,14 +51,16 @@ function Screen() {
   const player = useVideoPlayer(POUR, (p) => {
     p.muted = true
     p.loop = false
+    p.playbackRate = PLAYBACK_RATE
   })
 
   const sweep = useRef(new Animated.Value(0)).current
-  const videoBox = useRef('?')
+  const startedAt = useRef(0)
 
   const finish = useCallback(() => {
     clearTimeout(fallbackRef.current)
     setVideoLive(false)
+    setProgress(0)
     setPhase('ready')
   }, [])
 
@@ -64,13 +68,7 @@ function Screen() {
   useEffect(() => {
     if (!player?.addListener) return undefined
     const ended = player.addListener('playToEnd', () => finish())
-    const status = player.addListener('statusChange', (e) => {
-      if (e?.error) setDiag(`error: ${e.error.message ?? String(e.error)}`)
-    })
-    return () => {
-      ended?.remove?.()
-      status?.remove?.()
-    }
+    return () => ended?.remove?.()
   }, [player, finish])
 
   // Start playback from an effect, not from the tap handler: the handler runs a
@@ -84,21 +82,28 @@ function Screen() {
       /* not loaded yet; it starts from zero anyway */
     }
     try {
+      player.playbackRate = PLAYBACK_RATE
       player.play()
-    } catch (e) {
-      setDiag(`play threw: ${e?.message ?? e}`)
+    } catch {
+      /* fall through to the fallback timer below */
     }
+    startedAt.current = Date.now()
     const id = setInterval(() => {
+      let live = false
+      let p = 0
       try {
-        setVideoLive(player.status === 'readyToPlay' && player.playing === true)
-        if (DEBUG_VIDEO) {
-          const t = typeof player.currentTime === 'number' ? player.currentTime.toFixed(1) : '?'
-          setDiag(`${player.status} · playing=${player.playing} · t=${t} · view=${videoBox.current}`)
-        }
-      } catch (e) {
-        if (DEBUG_VIDEO) setDiag(`read threw: ${e?.message ?? e}`)
+        live = player.status === 'readyToPlay' && player.playing === true
+        const d = player.duration
+        // Progress through the clip itself, so slowing playback slows the chips
+        // with it. Wall-clock is only the fallback when nothing is rendering.
+        if (live && d > 0) p = player.currentTime / d
+        else p = (Date.now() - startedAt.current) / POUR_MS
+      } catch {
+        p = (Date.now() - startedAt.current) / POUR_MS
       }
-    }, 250)
+      setVideoLive(live)
+      setProgress(Math.max(0, Math.min(1, p)))
+    }, 120)
     return () => clearInterval(id)
   }, [phase, player])
 
@@ -112,6 +117,7 @@ function Screen() {
     }
     sweep.setValue(0)
     setVideoLive(false)
+    setProgress(0)
     setPhase('idle')
   }, [player, sweep])
 
@@ -157,10 +163,6 @@ function Screen() {
           style={{ position: 'absolute', top: 0, left: 0, width, height: heroH }}
           contentFit="cover"
           nativeControls={false}
-          onLayout={(e) => {
-            const { width: w, height: h } = e.nativeEvent.layout
-            videoBox.current = `${Math.round(w)}x${Math.round(h)}`
-          }}
         />
 
         {/* The still covers the video, and simply gets out of the way during the
@@ -179,13 +181,8 @@ function Screen() {
           <IngredientTicker
             drink={drink}
             active={phase === 'pouring'}
-            stepMs={POUR_MS / drink.ingredients.length}
+            progress={progress}
           />
-          {DEBUG_VIDEO && phase === 'pouring' && (
-            <View style={styles.diagChip}>
-              <Text style={styles.diagText}>{diag}</Text>
-            </View>
-          )}
           {phase === 'ready' && (
             <>
               <View style={styles.readyChip}>
@@ -277,13 +274,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(28, 18, 12, 0.72)',
   },
   readyText: { color: '#fff', fontSize: 13, fontWeight: '500' },
-  diagChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: 'rgba(0,0,0,0.78)',
-  },
-  diagText: { color: '#7CFFB2', fontSize: 11, fontWeight: '600' },
   again: {
     color: '#fff',
     fontSize: 13,

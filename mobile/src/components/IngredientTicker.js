@@ -1,26 +1,15 @@
-import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 
-// One ingredient at a time, in recipe order. This is what makes each drink read
-// differently over a single shared clip.
-export default function IngredientTicker({ drink, active, stepMs }) {
-  const [step, setStep] = useState(0)
-
-  useEffect(() => {
-    if (!active) {
-      setStep(0)
-      return undefined
-    }
-    setStep(0)
-    const id = setInterval(() => {
-      setStep((s) => Math.min(s + 1, drink.ingredients.length - 1))
-    }, stepMs)
-    return () => clearInterval(id)
-  }, [active, drink, stepMs])
-
+// Shows one ingredient at a time, chosen by how far through the clip the video
+// actually is rather than by a timer of its own — so the label always matches
+// what is on screen, whatever speed the clip is playing at.
+export default function IngredientTicker({ drink, active, progress }) {
   if (!active) return null
 
-  const ing = drink.ingredients[step]
+  let ing = drink.ingredients[0]
+  for (const candidate of drink.ingredients) {
+    if (progress >= candidate.at) ing = candidate
+  }
 
   return (
     <View style={styles.chip}>
