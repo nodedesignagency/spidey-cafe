@@ -4,18 +4,19 @@ import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-nativ
 import IngredientTicker from './IngredientTicker'
 import { theme } from '../theme'
 
-// The floating action bar.
+// The floating action bar, drawn to the redrawn button (node 26:71): a compact
+// stadium pill in the ink, wrapped in a white ring.
 //
-// It is laid out at exactly the coordinates the sheet's CTA occupies, in the same
-// ink, at the same size. So when the sheet drops away the button does not move -
-// it stays behind and becomes the progress bar, which is the whole reason the
-// collapse reads as the screen handing over rather than as two things happening.
+// It is laid out at exactly the coordinates the sheet's CTA occupies, at the
+// same size, ring included. So when the sheet drops away the button does not
+// move - it stays behind and becomes the progress bar, which is the whole
+// reason the collapse reads as the screen handing over rather than as two
+// things happening. The ring is the one part that changes: white on white it is
+// invisible in the sheet, and it only shows itself once the photo is behind it.
 //
-// The sweep is a translucent wash rather than a solid fill: the label sits on top
-// of it, and a solid bright fill in the ingredient's colour would have taken the
-// white text with it every time an ingredient was pale. The ingredient's colour
-// still drives the bar - as a tint under the wash, and as the dot in the label -
-// and the bright leading edge gives it the scanning head the fill would have.
+// The sweep is a flat fill with a hard edge, as drawn - no leading highlight and
+// no per-ingredient tint. The ingredient's colour lives in the dot instead,
+// which is now the only thing carrying it.
 export default function PourBar({
   phase,
   ingredient,
@@ -24,8 +25,10 @@ export default function PourBar({
   width,
   height,
   radius,
+  ring,
   bottom,
   fontSize,
+  pourFontSize,
 }) {
   const done = phase === 'ready' || phase === 'taken'
   // 0 while pouring, 1 once the drink is standing there. Retires the sweep and
@@ -64,116 +67,97 @@ export default function PourBar({
     return () => entrance.stop()
   }, [done, settled, arrive])
 
-  const tint = ingredient?.color ?? theme.sheet
-
   return (
     <Pressable
       onPress={onPress}
       disabled={phase !== 'ready'}
       accessibilityRole="button"
       accessibilityLabel={done ? 'Take it to go' : 'Pouring'}
-      style={({ pressed }) => [
-        styles.bar,
+      style={[
+        styles.ring,
         {
-          width,
-          height,
-          borderRadius: radius,
-          bottom,
-          marginLeft: -width / 2,
-          backgroundColor: phase === 'taken' ? theme.ctaDone : theme.ink,
+          width: width + ring * 2,
+          height: height + ring * 2,
+          borderRadius: radius + ring,
+          bottom: bottom - ring,
+          marginLeft: -(width + ring * 2) / 2,
+          padding: ring,
         },
-        pressed && phase === 'ready' && { backgroundColor: theme.ctaPress },
       ]}
     >
-      <Animated.View
-        style={[
-          styles.fill,
-          {
-            width: sweep.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
-            opacity: settled.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
-          },
-        ]}
-      >
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: tint, opacity: 0.38 }]} />
-        <View style={[StyleSheet.absoluteFill, styles.wash]} />
-        <View style={styles.edgeSoft} />
-        <View style={styles.edge} />
-      </Animated.View>
-
-      {/* Both labels stay mounted and cross-fade, so the last ingredient can leave
-          while the finished-drink label arrives, instead of one snapping to the
-          other on the frame the pour ends. */}
-      <View style={styles.labels} pointerEvents="none">
-        <Animated.View style={styles.labelLayer}>
-          <IngredientTicker
-            ingredient={ingredient}
-            active={phase === 'pouring'}
-            fontSize={fontSize}
-          />
-        </Animated.View>
-
-        <Animated.View
+      {({ pressed }) => (
+        <View
           style={[
-            styles.labelLayer,
+            styles.pill,
             {
-              opacity: arrive,
-              transform: [
-                {
-                  translateY: arrive.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [10, 0],
-                  }),
-                },
-              ],
+              width,
+              height,
+              borderRadius: radius,
+              backgroundColor: phase === 'taken' ? theme.ctaDone : theme.ink,
             },
+            pressed && phase === 'ready' && { backgroundColor: theme.ctaPress },
           ]}
         >
-          <Text style={[styles.ctaText, { fontSize }]}>
-            {phase === 'taken' ? 'Enjoy it ✓' : 'Take it to go'}
-          </Text>
-        </Animated.View>
-      </View>
+          <Animated.View
+            style={[
+              styles.fill,
+              {
+                backgroundColor: theme.ctaFill,
+                width: sweep.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
+                opacity: settled.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+              },
+            ]}
+          />
+
+          {/* Both labels stay mounted and dip, so the last ingredient can leave
+              while the finished-drink label arrives, instead of one snapping to
+              the other on the frame the pour ends. */}
+          <View style={styles.labels} pointerEvents="none">
+            <Animated.View style={styles.labelLayer}>
+              <IngredientTicker
+                ingredient={ingredient}
+                active={phase === 'pouring'}
+                fontSize={pourFontSize}
+                maxWidth={width - 28}
+              />
+            </Animated.View>
+
+            <Animated.View
+              style={[
+                styles.labelLayer,
+                {
+                  opacity: arrive,
+                  transform: [
+                    { translateY: arrive.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
+                  ],
+                },
+              ]}
+            >
+              <Text style={[styles.ctaText, { fontSize }]} numberOfLines={1}>
+                {phase === 'taken' ? 'Enjoy it ✓' : 'Take it to go'}
+              </Text>
+            </Animated.View>
+          </View>
+        </View>
+      )}
     </Pressable>
   )
 }
 
 const styles = StyleSheet.create({
-  bar: {
+  ring: {
     position: 'absolute',
     left: '50%',
+    backgroundColor: theme.ctaRing,
+  },
+  pill: {
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
-
   fill: { position: 'absolute', left: 0, top: 0, bottom: 0 },
-  wash: { backgroundColor: 'rgba(255,255,255,0.17)' },
-  // A soft shoulder behind a hard bright line: together they read as the head of
-  // the pour travelling across the bar.
-  edgeSoft: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: 20,
-    backgroundColor: 'rgba(255,255,255,0.24)',
-  },
-  edge: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: 2.5,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-  },
 
   labels: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
   labelLayer: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-  ctaText: {
-    color: '#fff',
-    fontWeight: '500',
-    textShadowColor: 'rgba(20,12,8,0.55)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
+  ctaText: { color: '#fff', fontWeight: '500' },
 })

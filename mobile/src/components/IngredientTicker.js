@@ -3,12 +3,13 @@ import { Animated, Easing, StyleSheet, Text, View } from 'react-native'
 
 // The label that rides inside the pour bar: a dot in the ingredient's colour and
 // the name of what is going in. Renders bare - no background of its own - because
-// the bar it sits in is the chrome.
+// the bar it sits in is the chrome. The dot is now the only thing carrying the
+// ingredient's colour, since the sweep behind it is a flat fill.
 //
 // Fades and lifts itself in and out, and dips between ingredients, rather than
 // snapping. `shown` lags the prop on purpose: the outgoing label has to stay
 // mounted long enough to animate away.
-export default function IngredientTicker({ ingredient, active, fontSize = 16 }) {
+export default function IngredientTicker({ ingredient, active, fontSize = 16, maxWidth }) {
   const anim = useRef(new Animated.Value(0)).current
   const [shown, setShown] = useState(null)
   const shownLabel = useRef(null)
@@ -66,8 +67,17 @@ export default function IngredientTicker({ ingredient, active, fontSize = 16 }) 
       ]}
     >
       <View style={[styles.dot, { backgroundColor: shown.color }]} />
-      <Text style={[styles.label, { fontSize }]} numberOfLines={1}>
-        Adding {shown.label.toLowerCase()}
+      {/* Just the ingredient, not "Adding <ingredient>": the redrawn button is
+          about half the width the old bar was, and the longest name only clears
+          it on its own. The dot and the filling bar already say what is
+          happening to it. Shrinks a little further if a name still overruns. */}
+      <Text
+        style={[styles.label, { fontSize, maxWidth }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.85}
+      >
+        {shown.label}
       </Text>
     </Animated.View>
   )
@@ -83,14 +93,5 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.55)',
   },
-  // The sweep passing underneath runs from near-black to near-white depending on
-  // the ingredient, so the label carries its own shadow rather than relying on
-  // the bar's ink being behind it.
-  label: {
-    color: '#fff',
-    fontWeight: '500',
-    textShadowColor: 'rgba(20,12,8,0.55)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
+  label: { color: '#fff', fontWeight: '500' },
 })

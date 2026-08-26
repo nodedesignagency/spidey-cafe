@@ -54,11 +54,15 @@ Tapping the CTA collapses the sheet: it shrinks and drops off the bottom, and
 the hero opens into the space it leaves, so the pour gets the whole screen.
 
 The button does not move. The bar that shows the pour is laid out at exactly the
-coordinates the sheet's CTA occupies, in the same ink at the same size, so the
-handover across the collapse is invisible — the button appears to stay behind
-while the white falls away, and then fills as the drink is built. The ingredient
-ticker lives inside it: one element names what is going in and shows how far
-along it is.
+coordinates the sheet's CTA occupies, in the same ink at the same size, ring
+included, so the handover across the collapse is invisible — the button appears
+to stay behind while the white falls away, and then fills as the drink is built.
+The ingredient ticker lives inside it: one element names what is going in and
+shows how far along it is.
+
+The ring is the one part that changes across the handover, and only because of
+what is behind it: white on the white sheet it is invisible, and it shows itself
+as the sheet drops and the photo arrives underneath.
 
 The sheet stays down for `ready` and `taken` and only springs back once the
 drink has been taken. So the carousel is unreachable from the moment the pour
@@ -74,8 +78,20 @@ autoplay is blocked the flow still completes and reaches `ready`.
 
 `mobile/src/theme.js` holds the measurements from the Figma frame (node 0:102,
 drawn at 393pt wide) as its own numbers — sheet 369 tall with a 40 radius, title
-20, drink name 14, CTA 350x56 at 20 from the bottom, ink `#3c2c21`. Positional
-values are multiplied by `width / 393` so proportions hold on other handsets.
+20, drink name 14, ink `#3c2c21`. Positional values are multiplied by
+`width / 393` so proportions hold on other handsets.
+
+The button is the exception: it was redrawn separately (node 26:71) as a compact
+stadium pill, 186x52 at 20 from the bottom, wrapped in a 7.5 white ring, with the
+pour sweeping across it as a flat `#63564d` fill behind a hard edge. Measured off
+that frame twice — against its phone width, and against the 125pt Dynamic Island
+in its status bar — which agreed to within a couple of points.
+
+The ring is why the pour label is the ingredient's name on its own rather than
+"Adding <ingredient>". At 186 wide the longer phrasing does not fit, and the
+coloured dot beside it already says what the name is for. That dot is also the
+only thing carrying the ingredient's colour now, since the sweep behind it is one
+flat brown rather than a per-ingredient tint.
 
 Two deliberate departures, both noted in the code:
 

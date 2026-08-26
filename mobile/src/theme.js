@@ -10,6 +10,8 @@ export const theme = {
   heroFallback: '#e8dcc8',
   ctaPress: '#2d2018',
   ctaDone: '#5a4433', // lifts a shade when the drink has been taken
+  ctaFill: '#63564d', // the pour sweep, per the redrawn button
+  ctaRing: '#ffffff', // invisible against the sheet, and only shows once it drops
 }
 
 export const spec = {
@@ -25,11 +27,20 @@ export const spec = {
   cupAspect: 0.504,
   nameTop: 253, // 50% of the sheet + 68.5, per the frame
   nameSize: 14,
-  ctaW: 350,
-  ctaH: 56,
-  ctaBottom: 20,
-  ctaRadius: 51.2,
+  // The button is the one place that no longer comes from node 0:102. It was
+  // redrawn (node 26:71) as a compact ringed pill: about half the screen wide
+  // rather than edge to edge, with a white ring around it. Measured off that
+  // frame two ways - against its phone width, and against the 125pt Dynamic
+  // Island in its status bar - which agreed to within a couple of points.
+  ctaW: 186,
+  ctaH: 52,
+  ctaBottom: 20, // of the pill; the ring sits 7.5 outside that
+  ctaRing: 7.5,
+  ctaRadius: 26, // half the height - a stadium, as drawn
   ctaTextSize: 18,
+  // Long ingredient names have to survive the narrower pill, so the pour label
+  // runs a size down from the CTA labels.
+  pourTextSize: 16,
   // Cup widths at 0, 1 and 2 steps from centre, and the overlap between them.
   cupScales: [1, 132.909 / 172, 103.571 / 172],
   // The frame's cup centres sit at x = 7.8, 85.0, 196.5, 307.9, 385.2 — steps of

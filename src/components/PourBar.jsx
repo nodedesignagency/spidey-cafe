@@ -6,9 +6,8 @@ import IngredientTicker from './IngredientTicker'
 // at the same size, so when the sheet drops away the button appears to stay
 // behind and become the progress bar rather than one thing replacing another.
 //
-// The sweep is a translucent wash rather than a solid fill: the label sits on
-// top of it, and a solid fill in the ingredient's colour would have taken the
-// white text with it every time an ingredient was pale.
+// The sweep is a flat fill with a hard edge, as drawn — no leading highlight and
+// no per-ingredient tint. The ingredient's colour lives in the dot instead.
 export default function PourBar({ phase, ingredient, progress, onPress }) {
   const done = phase === 'ready' || phase === 'taken'
 
@@ -20,12 +19,7 @@ export default function PourBar({ phase, ingredient, progress, onPress }) {
       disabled={!done || phase === 'taken'}
       aria-label={done ? 'Take it to go' : 'Pouring'}
     >
-      <i className="pourbar__fill" style={{ width: `${Math.round(progress * 100)}%` }}>
-        <i className="pourbar__tint" style={{ background: ingredient?.color ?? '#fff' }} />
-        <i className="pourbar__wash" />
-        <i className="pourbar__edge-soft" />
-        <i className="pourbar__edge" />
-      </i>
+      <i className="pourbar__fill" style={{ width: `${Math.round(progress * 100)}%` }} />
 
       {/* Both labels stay mounted and dip, so the last ingredient can leave
           before the finished-drink label arrives instead of the two overlapping

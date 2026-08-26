@@ -251,8 +251,13 @@ export default function App() {
   )
 
   const heroFrame = bleed.interpolate({ inputRange: [0, 1], outputRange: [heroH, height] })
+  // One geometry for the sheet's CTA and the floating bar, ring included, so the
+  // handover across the collapse lands on the same pixels.
   const barBottom = spec.ctaBottom * s
   const barH = spec.ctaH * s
+  const barW = spec.ctaW * s
+  const barRadius = spec.ctaRadius * s
+  const ringW = spec.ctaRing * s
 
   return (
     <View style={styles.root}>
@@ -357,23 +362,37 @@ export default function App() {
 
         {/* Sits at the exact coordinates PourBar takes over, in the same ink at
             the same size, so the handover across the collapse is invisible: the
-            button appears to stay put while the sheet falls away behind it. */}
+            button appears to stay put while the sheet falls away behind it. It
+            carries the ring too - white on white, so it costs nothing here and
+            is already in place when the photo arrives behind it. */}
         <Pressable
           onPress={pour}
           disabled={phase !== 'idle'}
-          style={({ pressed }) => [
-            styles.cta,
+          style={[
+            styles.ctaRing,
             {
-              width: spec.ctaW * s,
-              height: barH,
-              borderRadius: spec.ctaRadius * s,
-              bottom: barBottom,
-              marginLeft: -(spec.ctaW * s) / 2,
+              width: barW + ringW * 2,
+              height: barH + ringW * 2,
+              borderRadius: barRadius + ringW,
+              bottom: barBottom - ringW,
+              marginLeft: -(barW + ringW * 2) / 2,
+              padding: ringW,
             },
-            pressed && { backgroundColor: theme.ctaPress },
           ]}
         >
-          <Text style={[styles.ctaText, { fontSize: spec.ctaTextSize * s }]}>Spin it up</Text>
+          {({ pressed }) => (
+            <View
+              style={[
+                styles.ctaPill,
+                { width: barW, height: barH, borderRadius: barRadius },
+                pressed && { backgroundColor: theme.ctaPress },
+              ]}
+            >
+              <Text style={[styles.ctaText, { fontSize: spec.ctaTextSize * s }]} numberOfLines={1}>
+                Spin it up
+              </Text>
+            </View>
+          )}
         </Pressable>
       </Animated.View>
 
@@ -383,11 +402,13 @@ export default function App() {
           ingredient={drink.ingredients[stepIdx]}
           sweep={sweep}
           onPress={pour}
-          width={spec.ctaW * s}
+          width={barW}
           height={barH}
-          radius={spec.ctaRadius * s}
+          radius={barRadius}
+          ring={ringW}
           bottom={barBottom}
           fontSize={spec.ctaTextSize * s}
+          pourFontSize={spec.pourTextSize * s}
         />
       )}
     </View>
@@ -426,9 +447,12 @@ const styles = StyleSheet.create({
     color: theme.ink,
   },
 
-  cta: {
+  ctaRing: {
     position: 'absolute',
     left: '50%',
+    backgroundColor: theme.ctaRing,
+  },
+  ctaPill: {
     backgroundColor: theme.ink,
     alignItems: 'center',
     justifyContent: 'center',
