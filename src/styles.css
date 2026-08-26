@@ -174,7 +174,7 @@ body {
   right: 0;
   bottom: 0;
   z-index: 6;
-  padding: 26px 22px 26px;
+  padding: 18px 22px 26px;
   transition:
     transform var(--t-restore) cubic-bezier(0.22, 1, 0.36, 1),
     opacity 160ms ease 120ms;
@@ -197,7 +197,7 @@ body {
 }
 
 .sheet__title {
-  margin: 0;
+  margin: 0 0 8px;
   text-align: center;
   font-size: 25px;
   line-height: 1.22;

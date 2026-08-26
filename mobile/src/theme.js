@@ -17,7 +17,9 @@ export const theme = {
 export const spec = {
   sheetH: 369,
   sheetRadius: 40,
-  titleTop: 32,
+  // 8 up from the frame's 32: at 32 the title sat almost on top of the carousel
+  // row below it, and the sheet is a fixed height so only the title moves.
+  titleTop: 24,
   titleSize: 20,
   carouselTop: 64,
   cupBox: 176, // tallest cup in the row (height)
