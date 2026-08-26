@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Animated, Easing, StyleSheet, Text, View } from 'react-native'
+import { Animated, Easing, StyleSheet, Text } from 'react-native'
 
-// The label that rides inside the pour bar: a dot in the ingredient's colour and
-// the name of what is going in. Renders bare - no background of its own - because
-// the bar it sits in is the chrome. The dot is now the only thing carrying the
-// ingredient's colour, since the sweep behind it is a flat fill.
+// The label that rides inside the pour bar: the name of what is going in, and
+// nothing else. Renders bare - no background of its own - because the bar it sits
+// in is the chrome.
 //
 // Fades and lifts itself in and out, and dips between ingredients, rather than
 // snapping. `shown` lags the prop on purpose: the outgoing label has to stay
@@ -66,11 +65,10 @@ export default function IngredientTicker({ ingredient, active, fontSize = 16, ma
         },
       ]}
     >
-      <View style={[styles.dot, { backgroundColor: shown.color }]} />
       {/* Just the ingredient, not "Adding <ingredient>": the redrawn button is
           about half the width the old bar was, and the longest name only clears
-          it on its own. The dot and the filling bar already say what is
-          happening to it. Shrinks a little further if a name still overruns. */}
+          it on its own. The filling bar already says what is happening to it.
+          Shrinks a little further if a name still overruns. */}
       <Text
         style={[styles.label, { fontSize, maxWidth }]}
         numberOfLines={1}
@@ -84,14 +82,6 @@ export default function IngredientTicker({ ingredient, active, fontSize = 16, ma
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 9 },
-  // Ringed so the dot still reads when the sweep passes underneath it.
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.55)',
-  },
+  row: { flexDirection: 'row', alignItems: 'center' },
   label: { color: '#fff', fontWeight: '500' },
 })

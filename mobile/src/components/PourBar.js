@@ -15,8 +15,8 @@ import { theme } from '../theme'
 // invisible in the sheet, and it only shows itself once the photo is behind it.
 //
 // The sweep is a flat fill with a hard edge, as drawn - no leading highlight and
-// no per-ingredient tint. The ingredient's colour lives in the dot instead,
-// which is now the only thing carrying it.
+// no per-ingredient tint. Which drink is being built is carried by the hero and
+// by the ingredient names themselves, not by the bar.
 export default function PourBar({
   phase,
   ingredient,
@@ -118,7 +118,7 @@ export default function PourBar({
                 ingredient={ingredient}
                 active={phase === 'pouring'}
                 fontSize={pourFontSize}
-                maxWidth={width - 28}
+                maxWidth={width - 40}
               />
             </Animated.View>
 

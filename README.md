@@ -87,11 +87,13 @@ pour sweeping across it as a flat `#63564d` fill behind a hard edge. Measured of
 that frame twice — against its phone width, and against the 125pt Dynamic Island
 in its status bar — which agreed to within a couple of points.
 
-The ring is why the pour label is the ingredient's name on its own rather than
-"Adding <ingredient>". At 186 wide the longer phrasing does not fit, and the
-coloured dot beside it already says what the name is for. That dot is also the
-only thing carrying the ingredient's colour now, since the sweep behind it is one
-flat brown rather than a per-ingredient tint.
+The narrower button is why the pour label is the ingredient's name on its own
+rather than "Adding <ingredient>": at 186 wide the longer phrasing does not fit,
+and the bar filling behind it already says what is happening to the name.
+
+Nothing in the bar is tinted per ingredient any more — the sweep is one flat
+brown and the label is plain white. Which drink is being built is carried by the
+hero and by the ingredient names themselves.
 
 Two deliberate departures, both noted in the code:
 
